@@ -1,0 +1,22 @@
+# Build output
+build/
+dist/
+*.elf
+*.bin
+*.prx
+*.sprx
+*.pkg
+
+# Game data: never commit ROMs or assets extracted from them
+*.z64
+*.n64
+*.v64
+*.o2r
+*.otr
+
+# Generated art intermediates (see ps5/art/make-art.py)
+ps5/art/*-source.png
+!ps5/art/sohIcon-source.png
+
+__pycache__/
+*.stackdump

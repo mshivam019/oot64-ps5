@@ -1,0 +1,20 @@
+--- a/integration/SDL2/CMakeLists.txt
++++ b/integration/SDL2/CMakeLists.txt
+@@ -19,7 +19,7 @@
+ set(SDL_PTHREADS ON CACHE BOOL "" FORCE)
+ set(SDL_SOURCE_VERSION "2.30.12-g8c56053f13ca-g26")
+ set(SDL2_DISABLE_SDL2MAIN ON CACHE BOOL "" FORCE)
+-foreach(feature AUDIO RENDER HAPTIC SENSOR OPENGL OPENGLES VULKAN X11
++foreach(feature RENDER HAPTIC SENSOR OPENGL OPENGLES VULKAN X11
+                 WAYLAND KMSDRM OFFSCREEN JACK PULSEAUDIO DBUS IBUS FCITX LIBUDEV)
+     set(SDL_${feature} OFF CACHE BOOL "" FORCE)
+ endforeach()
+@@ -67,7 +67,7 @@
+ else()
+     # Reuse upstream's install/export rules; only this adapter's dependencies differ.
+     set_property(TARGET SDL2-static PROPERTY INTERFACE_LINK_LIBRARIES
+-        "$<INSTALL_INTERFACE:PS5OpenGLCore33::OpenGL>;ScePad;SceUserService;SceSystemService")
++        "$<INSTALL_INTERFACE:PS5OpenGLCore33::OpenGL>;ScePad;SceUserService;SceSystemService;SceAudioOut")
+     target_compile_definitions(SDL2-static INTERFACE SDL_MAIN_HANDLED=1)
+     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/sdl/SDL2Config.cmake"
+         "\ninclude(CMakeFindDependencyMacro)\nfind_dependency(PS5OpenGLCore33 CONFIG)\n")

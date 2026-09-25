@@ -1,0 +1,34 @@
+{
+  "shipwright": {
+    "url": "https://github.com/HarbourMasters/Shipwright.git",
+    "tag": "9.2.3",
+    "revision": "cb71e22a79bc5d1f688fa881795bbd93094895fc"
+  },
+  "libultraship": {
+    "url": "https://github.com/kenix3/libultraship.git",
+    "revision": "fdcaf6336776d24a6408d016b0a52243f108f250"
+  },
+  "sdl2": {
+    "url": "https://github.com/ps5-payload-dev/SDL.git",
+    "revision": "8c56053f13ca13a0c050de613706ff69eb615836"
+  },
+  "native_app_boilerplate": {
+    "url": "https://github.com/blackbearreloaded/ps5-native-app-boilerplate.git",
+    "revision": "c93771e0f9bf4f0993c3c317d7df4cc01888fb72"
+  },
+  "ps5_opengl_sdk": {
+    "version": "0.3.0",
+    "profile": "1080p60"
+  },
+  "dependencies": {
+    "zlib": ["https://github.com/madler/zlib.git", "v1.3.1"],
+    "libzip": ["https://github.com/nih-at/libzip.git", "v1.10.1"],
+    "nlohmann_json": ["https://github.com/nlohmann/json.git", "v3.11.3"],
+    "tinyxml2": ["https://github.com/leethomason/tinyxml2.git", "10.0.0"],
+    "spdlog": ["https://github.com/gabime/spdlog.git", "v1.14.1"],
+    "ogg": ["https://github.com/xiph/ogg.git", "v1.3.5"],
+    "vorbis": ["https://github.com/xiph/vorbis.git", "v1.3.7"],
+    "opus": ["https://github.com/xiph/opus.git", "v1.5.2"],
+    "opusfile": ["https://github.com/xiph/opusfile.git", "v0.12"]
+  }
+}

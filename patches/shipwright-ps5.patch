@@ -1,0 +1,442 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4429cc599..9e28c472c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -173,8 +173,10 @@ add_compile_definitions(CONTROLLERBUTTONS_T=uint32_t)
+ add_subdirectory(libultraship ${CMAKE_BINARY_DIR}/libultraship)
+ target_compile_options(libultraship PRIVATE "${WARNING_OVERRIDE}")
+ target_compile_definitions(libultraship PUBLIC INCLUDE_MPQ_SUPPORT)
++if(NOT CMAKE_SYSTEM_NAME STREQUAL "PS5")
+ add_subdirectory(ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
+ add_subdirectory(OTRExporter)
++endif()
+ add_subdirectory(soh)
+ 
+ set_property(TARGET soh PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)
+@@ -193,6 +195,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/soh/assets/extractor/" DESTINATION ./asse
+ install(DIRECTORY "${CMAKE_SOURCE_DIR}/soh/assets/xml/" DESTINATION ./assets/xml COMPONENT ship)
+ endif()
+ 
++if(NOT CMAKE_SYSTEM_NAME STREQUAL "PS5")
+ find_package(Python3 COMPONENTS Interpreter)
+ 
+ # Target to generate OTRs
+@@ -237,6 +240,8 @@ add_custom_target(
+     DEPENDS ZAPD
+ )
+ 
++endif() # NOT PS5
++
+ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+     find_package(ImageMagick COMPONENTS convert)
+     if (ImageMagick_FOUND)
+diff --git a/soh/CMakeLists.txt b/soh/CMakeLists.txt
+index 31955ebf9..849900dd9 100644
+--- a/soh/CMakeLists.txt
++++ b/soh/CMakeLists.txt
+@@ -93,7 +93,7 @@ if (NOT TARGET libultraship)
+     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libultraship ${CMAKE_BINARY_DIR}/libultraship)
+ endif()
+ 
+-if (NOT TARGET ZAPDLib)
++if (NOT TARGET ZAPDLib AND NOT CMAKE_SYSTEM_NAME STREQUAL "PS5")
+     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
+ endif()
+ 
+@@ -164,7 +164,7 @@ endif()
+ # soh/Extractor {{{
+ list(FILTER ship__ EXCLUDE REGEX "soh/Extractor/*")
+ 
+-if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
++if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS|PS5")
+     file(GLOB_RECURSE soh__Extractor RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+         "soh/Extractor/*.c"
+         "soh/Extractor/*.cpp"
+@@ -601,7 +601,7 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
+     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different ${CMAKE_SOURCE_DIR}/soh/assets/xml ${CMAKE_BINARY_DIR}/soh/assets/xml
+     )
+ endif()
+-if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
++if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS|PS5")
+     add_custom_command(
+         TARGET ${PROJECT_NAME}
+         POST_BUILD
+@@ -618,7 +618,7 @@ endif()
+ add_dependencies(${PROJECT_NAME}
+     libultraship
+ )
+-if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
++if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS|PS5")
+ add_dependencies(${PROJECT_NAME}
+     ZAPDLib
+ )
+@@ -679,6 +679,17 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
+         -lglad
+         Threads::Threads
+     )
++    find_package(OpusFile CONFIG REQUIRED)
++    set(ADDITIONAL_LIBRARY_DEPENDENCIES
++        "libultraship;"
++        SDL2::SDL2-static
++        "Ogg::ogg"
++        "Vorbis::vorbis"
++        "Vorbis::vorbisenc"
++        "Vorbis::vorbisfile"
++        "Opus::opus"
++        "OpusFile::opusfile"
++    )
+ elseif(CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
+     find_package(SDL2 REQUIRED)
+     set(ADDITIONAL_LIBRARY_DEPENDENCIES
+@@ -714,7 +725,7 @@ else()
+     )
+ endif()
+ 
+-if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|NintendoSwitch|CafeOS")
++if(NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|NintendoSwitch|CafeOS|PS5")
+ INSTALL(TARGETS soh DESTINATION . COMPONENT ship)
+ endif()
+ 
+@@ -731,11 +742,11 @@ configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/macosx/Info.plist.in ${CMAKE_BINARY_
+ INSTALL(TARGETS soh DESTINATION ../MacOS COMPONENT ship)
+ INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION ../MacOS COMPONENT ship)
+ INSTALL(FILES ${CMAKE_BINARY_DIR}/soh/soh.o2r DESTINATION ../Resources COMPONENT ship)
+-elseif(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "NintendoSwitch|CafeOS")
++elseif(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "NintendoSwitch|CafeOS|PS5")
+ INSTALL(FILES ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt DESTINATION . COMPONENT ship)
+ endif()
+ 
+-if(CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS")
++if(CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|CafeOS|PS5")
+     if (NOT TARGET pathconf)
+         add_library(pathconf OBJECT platform/pathconf.c)
+     endif()
+diff --git a/soh/include/functions.h b/soh/include/functions.h
+index 760b77f73..6ef7b6f3e 100644
+--- a/soh/include/functions.h
++++ b/soh/include/functions.h
+@@ -61,7 +61,7 @@ u32 Locale_IsRegionNative(void);
+ void _assert(const char* exp, const char* file, s32 line);
+ #elif defined(__linux__)
+ void __assert(const char* exp, const char* file, s32 line) __THROW;
+-#elif !defined(__APPLE__) && !defined(__SWITCH__) && !defined(__OpenBSD__)
++#elif !defined(__APPLE__) && !defined(__SWITCH__) && !defined(__OpenBSD__) && !defined(__PROSPERO__)
+ void __assert(const char* exp, const char* file, s32 line);
+ #endif
+ #if defined(__APPLE__) && defined(NDEBUG)
+diff --git a/soh/soh/Enhancements/Presets/Presets.cpp b/soh/soh/Enhancements/Presets/Presets.cpp
+index 12354dce4..027d0bfe8 100644
+--- a/soh/soh/Enhancements/Presets/Presets.cpp
++++ b/soh/soh/Enhancements/Presets/Presets.cpp
+@@ -216,6 +216,7 @@ void LoadPresets() {
+         presets.clear();
+     }
+     if (fs::exists(presetFolder)) {
++      try {
+         for (auto const& preset : fs::directory_iterator(presetFolder)) {
+             std::ifstream ifs(preset.path());
+ 
+@@ -228,6 +229,9 @@ void LoadPresets() {
+             }
+             ifs.close();
+         }
++      } catch (const std::filesystem::filesystem_error&) {
++            // Sandbox denies directory listing; ignore presets.
++      }
+     }
+     auto initData = std::make_shared<Ship::ResourceInitData>();
+     initData->Format = RESOURCE_FORMAT_BINARY;
+diff --git a/soh/soh/Enhancements/mod_menu.cpp b/soh/soh/Enhancements/mod_menu.cpp
+index ff9a459ba..ba04dbc59 100644
+--- a/soh/soh/Enhancements/mod_menu.cpp
++++ b/soh/soh/Enhancements/mod_menu.cpp
+@@ -1,5 +1,8 @@
+ #include <map>
+ #include <vector>
++#ifdef __PROSPERO__
++#include <fstream>
++#endif
+ 
+ #include <libultraship/classes.h>
+ #include <ship/utils/StringHelper.h>
+@@ -123,6 +126,7 @@ bool IsValidExtension(std::string extension) {
+ }
+ 
+ void UpdateModFiles(bool init = false, bool reset = false) {
++  try {
+     if (init || reset) {
+         enabledModFiles.clear();
+         enabledModFiles = GetEnabledModsFromCVar();
+@@ -131,13 +135,59 @@ void UpdateModFiles(bool init = false, bool reset = false) {
+     unsupportedFiles.clear();
+     filePaths.clear();
+     bool changed = false;
++#ifdef __PROSPERO__
++    const std::filesystem::path manifestPath =
++        Ship::Context::LocateFileAcrossAppDirs("mods/mods.txt", appShortName);
++    std::string modsPath = manifestPath.parent_path().generic_string();
++#else
+     std::string modsPath = Ship::Context::LocateFileAcrossAppDirs("mods", appShortName);
++#endif
+     std::map<std::string, std::string> tempMods;
+     if (modsPath.length() > 0 && std::filesystem::exists(modsPath)) {
+         std::vector<std::filesystem::path> enabledFiles;
+         if (std::filesystem::is_directory(modsPath)) {
++#ifdef __PROSPERO__
++            // The sandbox permits opening known files, but denies readdir.
++            // Resolve the manifest itself so an empty data/mods directory does
++            // not hide packs installed in /app0/assets/mods.
++            std::ifstream manifest(manifestPath);
++            std::string line;
++            while (std::getline(manifest, line)) {
++                if (line.compare(0, 3, "\xEF\xBB\xBF") == 0) {
++                    line.erase(0, 3);
++                }
++                const auto first = line.find_first_not_of(" \t\r");
++                if (first == std::string::npos || line[first] == '#') {
++                    continue;
++                }
++                line = line.substr(first, line.find_last_not_of(" \t\r") - first + 1);
++                const std::filesystem::path relative(line);
++                if (relative.is_absolute() || line.find('\\') != std::string::npos ||
++                    line.find('|') != std::string::npos || line.find('\0') != std::string::npos ||
++                    std::any_of(relative.begin(), relative.end(), [](const auto& part) { return part == ".."; })) {
++                    SPDLOG_WARN("Ignoring invalid mod manifest entry: {}", line);
++                    continue;
++                }
++                const auto path = (manifestPath.parent_path() / relative).lexically_normal();
++                std::error_code error;
++                if (IsValidExtension(path.extension().generic_string()) &&
++                    std::filesystem::is_regular_file(path, error)) {
++                    enabledFiles.push_back(path);
++                } else {
++                    SPDLOG_WARN("Mod archive missing or unsupported: {}", path.generic_string());
++                }
++            }
++            if (manifest.bad()) {
++                SPDLOG_ERROR("Could not read mod manifest: {}", manifestPath.generic_string());
++                enabledModFiles.clear();
++                return;
++            }
++            for (const auto& path : enabledFiles) {
++                const std::filesystem::directory_entry p(path);
++#else
+             for (const std::filesystem::directory_entry& p : std::filesystem::recursive_directory_iterator(
+                      modsPath, std::filesystem::directory_options::follow_directory_symlink)) {
++#endif
+                 if (p.is_directory()) {
+                     continue;
+                 }
+@@ -147,6 +197,10 @@ void UpdateModFiles(bool init = false, bool reset = false) {
+                 if (!IsValidExtension(extension)) {
+                     continue;
+                 }
++                if (filePaths.contains(filename)) {
++                    SPDLOG_WARN("Ignoring duplicate mod name: {}", p.path().generic_string());
++                    continue;
++                }
+                 bool enabled =
+                     std::find(enabledModFiles.begin(), enabledModFiles.end(), filename) != enabledModFiles.end();
+                 if (!enabled) {
+@@ -177,6 +231,13 @@ void UpdateModFiles(bool init = false, bool reset = false) {
+             SetEnabledModsCVarValue();
+         }
+     }
++  } catch (const std::filesystem::filesystem_error&) {
++        // PS5 (/app0*) and other sandboxes deny directory listing; skip mods gracefully.
++  }
++#ifdef __PROSPERO__
++    // A removed pack must not leave a menu entry whose filePaths.at() throws.
++    std::erase_if(enabledModFiles, [](const auto& name) { return !filePaths.contains(name); });
++#endif
+ }
+ 
+ extern "C" void gfx_texture_cache_clear();
+diff --git a/soh/soh/OTRGlobals.cpp b/soh/soh/OTRGlobals.cpp
+index 39f04ddbb..7425f8c76 100644
+--- a/soh/soh/OTRGlobals.cpp
++++ b/soh/soh/OTRGlobals.cpp
+@@ -7,6 +7,9 @@
+ #include <vector>
+ #include <chrono>
+ #include <optional>
++#ifdef __PROSPERO__
++#include "PS5FramePacer.h"
++#endif
+ 
+ #include "ResourceManagerHelpers.h"
+ #include <fast/Fast3dWindow.h>
+@@ -430,7 +433,12 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
+     OSFatal();
+ #endif
+ 
++#ifdef __PROSPERO__
++    // The PS5 install path is already the assets folder holding the shipped .o2r files.
++    if (!std::filesystem::exists(installPath)) {
++#else
+     if (!std::filesystem::exists(installPath + "/assets")) {
++#endif
+         SohGui::RegisterPopup("Extractor assets not found",
+                               "No O2R files found. Missing 'assets/' folder needed to generate OTR file.\nPlease "
+                               "re-extract them from the download or.\n\nExiting...",
+@@ -459,7 +467,7 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
+                 if (sohArchiveVersionMatch) {
+ #ifdef _WIN32
+                     extractStep = ES_WINDOWS;
+-#elif (defined(__WIIU__) || defined(__SWITCH__))
++#elif (defined(__WIIU__) || defined(__SWITCH__) || defined(__PROSPERO__))
+                     extractStep = ES_VERIFY;
+ #else
+                     extractStep = args.empty() ? ES_EXTRACT : ES_EXTRACT_ARGS;
+@@ -1701,7 +1709,7 @@ extern "C" void Graph_StartFrame() {
+ #endif
+ }
+ 
+-void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>>& mtx_replacements) {
++void RunCommands(Gfx* Commands, const std::vector<float>& interpolationSteps) {
+     auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(OTRGlobals::Instance->context->GetWindow());
+ 
+     if (wnd == nullptr) {
+@@ -1717,7 +1725,33 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
+     UIWidgets::Colors themeColor =
+         static_cast<UIWidgets::Colors>(CVarGetInteger(CVAR_SETTING("Menu.Theme"), UIWidgets::Colors::LightBlue));
+     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(themeColor));
+-    for (const auto& m : mtx_replacements) {
++#ifdef __PROSPERO__
++    static PS5FramePacer pacer;
++    const auto now = []() {
++        return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++    };
++    const int targetFps = OTRGlobals::Instance->GetInterpolationFPS();
++    const bool paced = targetFps > 60 / R_UPDATE_RATE && !GfxDebuggerIsDebugging();
++    if (paced) {
++        pacer.BeginTick(now(), R_UPDATE_RATE, targetFps);
++    } else {
++        pacer.Reset();
++    }
++    bool rendered = false;
++#endif
++    for (size_t i = 0; i < interpolationSteps.size(); ++i) {
++        const float phase = interpolationSteps[i];
++#ifdef __PROSPERO__
++        // Drop expired pictures, never game/audio updates. Keep the original
++        // interpolation index for display-list commands that select a subframe.
++        // At least one draw per tick also refreshes depth and GUI state under load.
++        if (paced && !pacer.ShouldRender(now(), phase) && (rendered || i + 1 < interpolationSteps.size())) {
++            intp->mInterpolationIndex++;
++            continue;
++        }
++        rendered = true;
++#endif
++        const auto m = phase < 1.0f ? FrameInterpolation_Interpolate(phase) : std::unordered_map<Mtx*, MtxF>{};
+         wnd->DrawAndRunGraphicsCommands(Commands, m);
+         intp->mInterpolationIndex++;
+     }
+@@ -1732,7 +1766,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+     }
+ 
+     audio.cv_to_thread.notify_one();
+-    std::vector<std::unordered_map<Mtx*, MtxF>> mtx_replacements;
++    std::vector<float> interpolationSteps;
+     int target_fps = OTRGlobals::Instance->GetInterpolationFPS();
+     static int last_fps;
+     static int last_update_rate;
+@@ -1754,11 +1788,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+ 
+     while (time + original_fps <= next_original_frame) {
+         time += original_fps;
+-        if (time != next_original_frame) {
+-            mtx_replacements.push_back(FrameInterpolation_Interpolate((float)time / next_original_frame));
+-        } else {
+-            mtx_replacements.emplace_back();
+-        }
++        interpolationSteps.push_back((float)time / next_original_frame);
+     }
+ 
+     time -= fps;
+@@ -1769,11 +1799,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+ 
+     // When the gfx debugger is active, only run with the final mtx
+     if (GfxDebuggerIsDebugging()) {
+-        mtx_replacements.clear();
+-        mtx_replacements.emplace_back();
++        interpolationSteps.clear();
++        interpolationSteps.push_back(1.0f);
+     }
+ 
+-    RunCommands(commands, mtx_replacements);
++    RunCommands(commands, interpolationSteps);
+ 
+     last_fps = fps;
+     last_update_rate = R_UPDATE_RATE;
+diff --git a/soh/soh/frame_interpolation.cpp b/soh/soh/frame_interpolation.cpp
+index ae2ee0efd..6b5f783c9 100644
+--- a/soh/soh/frame_interpolation.cpp
++++ b/soh/soh/frame_interpolation.cpp
+@@ -110,6 +110,16 @@ typedef pair<const void*, int> label;
+ union Data {
+     Data() {
+     }
++#ifdef __PROSPERO__
++    // Every member is plain data; PS5 libc++ otherwise treats the copy as deleted.
++    Data(const Data& other) {
++        memcpy((void*)this, &other, sizeof(Data));
++    }
++    Data& operator=(const Data& other) {
++        memcpy((void*)this, &other, sizeof(Data));
++        return *this;
++    }
++#endif
+ 
+     struct {
+         MtxF src;
+diff --git a/soh/src/buffers/heaps.c b/soh/src/buffers/heaps.c
+index de81705cb..93e4584ed 100644
+--- a/soh/src/buffers/heaps.c
++++ b/soh/src/buffers/heaps.c
+@@ -1,6 +1,6 @@
+ #include "z64.h"
+ #include <assert.h>
+-#if !defined(__APPLE__) && !defined(__OpenBSD__)
++#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__PROSPERO__)
+ #include <malloc.h>
+ #endif
+ #include <stdlib.h>
+diff --git a/soh/soh/PS5FramePacer.h b/soh/soh/PS5FramePacer.h
+new file mode 100644
+--- /dev/null
++++ b/soh/soh/PS5FramePacer.h
+@@ -0,0 +1,33 @@
++#pragma once
++
++// Deadlines are in monotonic seconds. A game tick advances the timeline once,
++// regardless of how many of its interpolated pictures the renderer can finish.
++class PS5FramePacer {
++  public:
++    void BeginTick(double now, int updateRate, int targetFps) {
++        const double duration = updateRate / 60.0;
++        if (updateRate != mUpdateRate || targetFps != mTargetFps || now - mDeadline > 0.25 ||
++            now < mDeadline - duration) {
++            mDeadline = now;
++        }
++        mStart = mDeadline;
++        mDeadline += duration;
++        mUpdateRate = updateRate;
++        mTargetFps = targetFps;
++    }
++
++    bool ShouldRender(double now, float phase) const {
++        return now < mStart + (mDeadline - mStart) * phase;
++    }
++
++    void Reset() {
++        mUpdateRate = 0;
++        mTargetFps = 0;
++    }
++
++  private:
++    double mStart = 0.0;
++    double mDeadline = 0.0;
++    int mUpdateRate = 0;
++    int mTargetFps = 0;
++};

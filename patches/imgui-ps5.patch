@@ -1,0 +1,12 @@
+--- a/backends/imgui_impl_opengl3.cpp
++++ b/backends/imgui_impl_opengl3.cpp
+@@ -896,6 +896,9 @@
+         "void main()\n"
+         "{\n"
+         "    Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
++#ifdef __PROSPERO__
++        "    Out_Color = Out_Color.bgra;\n"
++#endif
+         "}\n";
+ 
+     // Select shaders matching our GLSL versions

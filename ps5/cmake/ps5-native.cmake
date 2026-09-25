@@ -1,0 +1,41 @@
+# PS5 native-app toolchain: ps5-native-app-boilerplate compiler wrappers + ps5-opengl SDK 0.3.0.
+# Override locations with the PS5SDK_ROOT, PS5_NATIVE_APP_TEMPLATE, PS5_OPENGL_SDK and
+# PS5_OPENGL_ROOT environment variables (see tools/env.sh).
+set(PS5 TRUE)
+set(CMAKE_SYSTEM_NAME FreeBSD)
+set(CMAKE_SYSTEM_VERSION 9)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+macro(ps5_path var env default)
+    if(DEFINED ENV{${env}})
+        set(${var} $ENV{${env}})
+    else()
+        set(${var} ${default})
+    endif()
+endmacro()
+
+ps5_path(PS5SDK_ROOT PS5SDK_ROOT /opt/ps5sdk)
+ps5_path(PS5_BOILERPLATE PS5_NATIVE_APP_TEMPLATE ${PS5SDK_ROOT}/native-app-boilerplate)
+ps5_path(PS5_OPENGL_PREFIX PS5_OPENGL_SDK ${PS5SDK_ROOT}/extracted/ps5-opengl-sdk-0.3.0/sdk)
+ps5_path(PS5_OPENGL_ROOT PS5_OPENGL_ROOT ${PS5SDK_ROOT}/ps5-opengl-030/ps5-opengl)
+set(PS5_SDL2_PREFIX ${PS5_OPENGL_ROOT}/build/sdl2-native/sdk)
+set(PS5_DEPS_PREFIX ${PS5SDK_ROOT}/prefix)
+
+set(PS5_PAYLOAD_SDK ${PS5_BOILERPLATE}/.deps/native/ps5-payload-sdk)
+set(ENV{PS5_PAYLOAD_SDK} ${PS5_PAYLOAD_SDK})
+set(CMAKE_C_COMPILER ${PS5_BOILERPLATE}/tooling/prospero-clang18)
+set(CMAKE_CXX_COMPILER ${PS5_BOILERPLATE}/tooling/prospero-clang18++)
+set(CMAKE_AR /usr/bin/llvm-ar-18 CACHE FILEPATH "")
+set(CMAKE_RANLIB /usr/bin/llvm-ranlib-18 CACHE FILEPATH "")
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+set(CMAKE_C_FLAGS_INIT "-D__PROSPERO__ -fPIC -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_INIT "-D__PROSPERO__ -fexceptions -fcxx-exceptions -frtti -fPIC -ffunction-sections -fdata-sections")
+
+set(CMAKE_FIND_ROOT_PATH ${PS5_DEPS_PREFIX} ${PS5_SDL2_PREFIX} ${PS5_OPENGL_PREFIX} ${PS5_PAYLOAD_SDK}/target)
+set(CMAKE_PREFIX_PATH ${PS5_DEPS_PREFIX} ${PS5_SDL2_PREFIX} ${PS5_OPENGL_PREFIX})
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)

@@ -1,0 +1,2 @@
+# Unified diffs contain a context prefix before blank lines and Makefile tabs.
+*.patch whitespace=-blank-at-eol,-space-before-tab

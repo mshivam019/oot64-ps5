@@ -1,0 +1,780 @@
+--- a/src/gallium/ps5/ps5_screen.c
++++ b/src/gallium/ps5/ps5_screen.c
+@@ -98,11 +98,15 @@
+     PS5_RENDER_ARENA_SLOT_BYTES)
+ #define PS5_RENDER_ARENA_BITMAP_WORDS \
+    ((PS5_RENDER_ARENA_SLOT_COUNT + 63u) / 64u)
++/* Template flag: the creator overwrites the whole buffer, so skip the clear. */
++#define PS5_RESOURCE_FLAG_UNINITIALIZED PIPE_RESOURCE_FLAG_DRV_PRIV
++#define PS5_DESCRIPTOR_CACHE_SLOTS 128u
+ 
+ struct ps5_screen {
+    struct pipe_screen base;
+    struct pipe_resource *render_pool;
+    uint64_t render_arena_bitmap[PS5_RENDER_ARENA_BITMAP_WORDS];
++   unsigned render_arena_next;
+    simple_mtx_t resource_mutex;
+    simple_mtx_t submit_mutex;
+ };
+@@ -113,8 +117,12 @@
+ #endif
+ /* Runtime setters/queue are process-global, including across pipe_screens. */
+ static simple_mtx_t ps5_deferred_mutex = SIMPLE_MTX_INITIALIZER;
++static const char *ps5_deferred_flush_reason = "";
+ static void ps5_draw_batch_flush_locked(void);
+-static void ps5_draw_batch_drain_buffer(struct pipe_resource *resource);
++static void ps5_draw_batch_drain_buffer_from(struct pipe_resource *resource,
++                                             const char *who);
++#define ps5_draw_batch_drain_buffer(resource) \
++   ps5_draw_batch_drain_buffer_from((resource), __func__)
+ #else
+ #define ps5_draw_batch_drain_buffer(resource) ((void)(resource))
+ #endif
+@@ -145,13 +153,17 @@
+ }
+ 
+ static void
+-ps5_draw_batch_drain(void)
++ps5_draw_batch_drain_from(const char *who)
+ {
+ #ifdef PS5_DEFERRED_DRAW_BATCH
++   ps5_deferred_flush_reason = who;
+    ps5_screen_submit_lock(NULL);
+    ps5_screen_submit_unlock(NULL);
++#else
++   (void)who;
+ #endif
+ }
++#define ps5_draw_batch_drain() ps5_draw_batch_drain_from(__func__)
+ 
+ #define PS5_MAX_TEXTURE_UNITS 16u
+ #define PS5_MERGED_TEXTURE_UNITS (2u * PS5_MAX_TEXTURE_UNITS)
+@@ -223,7 +235,7 @@
+ struct ps5_context {
+    struct pipe_context base;
+    struct blitter_context *blitter;
+-   bool deferred_color_clear;
++   bool deferred_clear;
+    int last_draw_status;
+    unsigned draw_calls;
+    bool legacy_primitive_conversion;
+@@ -268,6 +280,9 @@
+    unsigned vertex_buffer_count;
+    struct pipe_resource *vertex_descriptor_table;
+    struct pipe_resource *descriptor_storage[PS5_DESCRIPTOR_STAGE_COUNT];
++#ifdef PS5_DEFERRED_DRAW_BATCH
++   struct pipe_resource *descriptor_cache[PS5_DESCRIPTOR_CACHE_SLOTS][3];
++#endif
+    struct pipe_resource *border_color_storage;
+    unsigned border_color_count;
+    struct pipe_stream_output_target *stream_output_targets[PIPE_MAX_SO_BUFFERS];
+@@ -416,6 +431,10 @@
+    int64_t stencil_direct_start;
+    unsigned render_arena_first_slot;
+    unsigned render_arena_slot_count;
++   /* Only resource_create owns disjoint buffer storage. Display aliases and
++    * any future imported resources must use the conservative overlap scan. */
++   bool exclusive_buffer_storage;
++   unsigned deferred_uses; /* protected by ps5_deferred_mutex */
+ };
+ 
+ struct ps5_transfer {
+@@ -2401,18 +2420,20 @@
+ }
+ 
+ struct ps5_batch_flush_cache {
+-   const void *data[2 + PS5_MAX_TEXTURE_UNITS];
+-   size_t size[2 + PS5_MAX_TEXTURE_UNITS];
++   const void *data[256];
++   size_t size[256];
+ };
+ 
+ static void
+ ps5_flush_batch_backing(struct ps5_batch_flush_cache *batch, unsigned slot,
+                          const void *data, size_t bytes)
+ {
+-   /* Only unsubmitted, retained batch resources may reuse a CPU flush. CPU
+-    * access drains that batch; its cache is discarded before the next draw.
+-    * ponytail: last backing per plane/texture unit, reset at every batch drain. */
++   /* CPU texture/depth access drains the batch. Cache by backing, rather than
++    * texture unit, so rebinding an HD texture does not flush it again. Hash
++    * collisions only cause extra flushes; exact address and size must match. */
+ #ifdef PS5_GPU_PRESENT_BATCH
++   const uintptr_t address = (uintptr_t)data;
++   slot = ((address >> 8) ^ (address >> 16) ^ (address >> 24) ^ bytes) & 255u;
+    if (batch && data && bytes &&
+        batch->data[slot] == data && batch->size[slot] == bytes)
+       return;
+@@ -3241,6 +3262,7 @@
+                 state->size > storage->size - copied_offset)
+                return false;
+             data_address = (uintptr_t)storage->data + copied_offset;
++            ps5_flush_gpu_data((void *)data_address, state->size);
+          } else {
+             buffer = (struct ps5_resource *)state->buffer;
+             if (!buffer || buffer->base.target != PIPE_BUFFER ||
+@@ -3261,7 +3283,9 @@
+       return false;
+    user_data[metadata->descriptor_set0_user_data_dword] =
+       (uint32_t)descriptor_address;
+-   ps5_flush_gpu_data(storage->data, storage->size);
++   /* Uniform copies were flushed above; the tessellation and texture tables
++    * flush their own ranges. Only the descriptor header remains. */
++   ps5_flush_gpu_data(storage->data, PS5_CONSTANT_DATA_OFFSET);
+    return true;
+ }
+ 
+@@ -4388,16 +4412,17 @@
+    return ps5_resource_layout(&proxy, &size, &stride);
+ }
+ 
+-static bool
+-ps5_render_arena_range_is_free(const struct ps5_screen *screen,
+-                               unsigned first, unsigned count)
++/* Index of the first used slot in [first, first + count), or UINT_MAX if free. */
++static unsigned
++ps5_render_arena_first_used(const struct ps5_screen *screen,
++                            unsigned first, unsigned count)
+ {
+    for (unsigned slot = first; slot < first + count; ++slot) {
+       if (screen->render_arena_bitmap[slot / 64u] &
+           (UINT64_C(1) << (slot % 64u)))
+-         return false;
+-   }
+-   return true;
++         return slot;
++   }
++   return UINT_MAX;
+ }
+ 
+ static void
+@@ -4417,7 +4442,7 @@
+ static bool
+ ps5_render_arena_allocate(struct ps5_screen *screen,
+                           struct ps5_resource *resource, size_t size,
+-                          size_t alignment)
++                          size_t alignment, bool clear)
+ {
+    struct ps5_resource *pool =
+       (struct ps5_resource *)screen->render_pool;
+@@ -4432,27 +4457,39 @@
+       return false;
+    slots = (unsigned)(size / PS5_RENDER_ARENA_SLOT_BYTES);
+    slot_alignment = (unsigned)(alignment / PS5_RENDER_ARENA_SLOT_BYTES);
+-   for (unsigned first = 0;
+-        first + slots <= PS5_RENDER_ARENA_SLOT_COUNT; ++first) {
+-      if (first % slot_alignment ||
+-          !ps5_render_arena_range_is_free(screen, first, slots))
+-         continue;
+-      ps5_render_arena_mark(screen, first, slots, true);
+-      resource->render_arena_first_slot = first;
+-      resource->render_arena_slot_count = slots;
+-      resource->data = pool->data + PS5_RENDER_ARENA_OFFSET +
+-                       first * PS5_RENDER_ARENA_SLOT_BYTES;
+-      resource->allocation_size = size;
+-      pipe_resource_reference(&resource->render_pool_owner,
+-                              screen->render_pool);
+-      memset(resource->data, 0, size);
++   /* Next-fit: transient per-draw buffers are freed in order, so continuing
++    * after the last allocation avoids rescanning the occupied front. */
++   for (unsigned pass = 0; pass < 2; ++pass) {
++      unsigned first = pass ? 0 : screen->render_arena_next;
++      const unsigned end = pass ? screen->render_arena_next : PS5_RENDER_ARENA_SLOT_COUNT;
++      while (true) {
++         first += (slot_alignment - first % slot_alignment) % slot_alignment;
++         if (first + slots > end)
++            break;
++         const unsigned used = ps5_render_arena_first_used(screen, first, slots);
++         if (used != UINT_MAX) {
++            first = used + 1u;
++            continue;
++         }
++         ps5_render_arena_mark(screen, first, slots, true);
++         screen->render_arena_next = first + slots;
++         resource->render_arena_first_slot = first;
++         resource->render_arena_slot_count = slots;
++         resource->data = pool->data + PS5_RENDER_ARENA_OFFSET +
++                          first * PS5_RENDER_ARENA_SLOT_BYTES;
++         resource->allocation_size = size;
++         pipe_resource_reference(&resource->render_pool_owner,
++                                 screen->render_pool);
++         if (clear)
++            memset(resource->data, 0, size);
+ #ifdef AGC_RUNTIME_DIAGNOSTICS
+-      printf("[ps5-gallium] shared-resource offset=%zu bytes=%zu first=%u count=%u alignment=%zu\n",
+-             PS5_RENDER_ARENA_OFFSET +
+-                first * (size_t)PS5_RENDER_ARENA_SLOT_BYTES,
+-             size, first, slots, alignment);
++         printf("[ps5-gallium] shared-resource offset=%zu bytes=%zu first=%u count=%u alignment=%zu\n",
++                PS5_RENDER_ARENA_OFFSET +
++                   first * (size_t)PS5_RENDER_ARENA_SLOT_BYTES,
++                size, first, slots, alignment);
+ #endif
+-      return true;
++         return true;
++      }
+    }
+    return false;
+ }
+@@ -4686,7 +4723,8 @@
+        !(templ->bind & PIPE_BIND_DISPLAY_TARGET) &&
+        templ->format != PIPE_FORMAT_Z32_FLOAT_S8X24_UINT) {
+       if (!ps5_render_arena_allocate(ps5, resource, allocation_size,
+-                                     allocation_alignment)) {
++                                     allocation_alignment,
++                                     !(templ->flags & PS5_RESOURCE_FLAG_UNINITIALIZED))) {
+          printf("[ps5-gallium] shared-resource exhausted bytes=%zu alignment=%zu\n",
+                 allocation_size, allocation_alignment);
+          /* The arena is an allocation fast path, not a resource-size limit.
+@@ -4845,6 +4883,7 @@
+              (size_t)(PS5_RENDER_POOL_BYTES - PS5_RENDER_ARENA_OFFSET));
+    }
+    if (templ->target == PIPE_BUFFER) {
++      resource->exclusive_buffer_storage = true;
+       resource->level_stride[0] = stride;
+       resource->layer_stride = size;
+    } else {
+@@ -9453,6 +9492,7 @@
+    if (input_metadata->vertex_buffer_table_valid) {
+       uint32_t binding_mask = 0;
+       uint32_t binding_records[PIPE_MAX_ATTRIBS] = {0};
++      size_t binding_bytes[PIPE_MAX_ATTRIBS] = {0};
+       unsigned descriptor_index = 0;
+       unsigned element_index;
+       unsigned binding;
+@@ -9516,8 +9556,11 @@
+             return;
+          }
+          binding_records[element->vertex_buffer_index] =
+-            MAX2(binding_records[element->vertex_buffer_index],
+-                 (uint32_t)descriptor_records);
++             MAX2(binding_records[element->vertex_buffer_index],
++                  (uint32_t)descriptor_records);
++         binding_bytes[element->vertex_buffer_index] =
++            MAX2(binding_bytes[element->vertex_buffer_index],
++                 (size_t)required - vertex_buffer->buffer_offset);
+          binding_mask |= BITFIELD_BIT(element->vertex_buffer_index);
+       }
+       descriptor_address = (uintptr_t)descriptor_resource->data;
+@@ -9567,7 +9610,7 @@
+             context->last_draw_status = -9;
+             return;
+          }
+-         ps5_flush_gpu_data(vertex_resource->data, vertex_resource->size);
++         ps5_flush_gpu_data((const void *)vertex_address, binding_bytes[binding]);
+          descriptor_index++;
+       }
+       input_user_data[input_metadata->vertex_buffer_table_user_data_dword] =
+@@ -10422,7 +10465,7 @@
+ 
+    if (!info || !draws || !num_draws || indirect ||
+        (info->mode != MESA_PRIM_TRIANGLES &&
+-        !(context->deferred_color_clear && context->blitter && context->blitter->running &&
++        !(context->deferred_clear && context->blitter && context->blitter->running &&
+           info->mode == MESA_PRIM_TRIANGLE_FAN && num_draws == 1 &&
+           !info->index_size && info->instance_count == 1 && !info->start_instance &&
+           draws[0].start == 0 && draws[0].count == 4)) || !info->instance_count ||
+@@ -10487,15 +10530,53 @@
+                            struct pipe_resource *const saved[3],
+                            struct pipe_resource *storage[3])
+ {
++   const struct ps5_context *context = (const struct ps5_context *)base;
++   /* Constant slots whose inline uniforms live in each descriptor storage. */
++   static const unsigned storage_slots[PS5_DESCRIPTOR_STAGE_COUNT][4] = {
++      {0, PS5_GEOMETRY_CONSTANT_SLOT, PS5_TESS_CTRL_CONSTANT_SLOT,
++       PS5_TESS_EVAL_CONSTANT_SLOT},
++      {1, PS5_CONSTANT_STAGE_COUNT, PS5_CONSTANT_STAGE_COUNT,
++       PS5_CONSTANT_STAGE_COUNT},
++   };
++
+    for (unsigned stage = 0; stage < 3; ++stage) {
+       const struct ps5_resource *source = (const struct ps5_resource *)saved[stage];
+       if (!source || !source->data || source->base.target != PIPE_BUFFER)
+          return false;
+-      storage[stage] = base->screen->resource_create(base->screen, &source->base);
+       struct ps5_resource *copy = (struct ps5_resource *)storage[stage];
++      if (copy && (copy->base.screen != base->screen || copy->size != source->size))
++         pipe_resource_reference(&storage[stage], NULL);
++      if (!storage[stage]) {
++         struct pipe_resource templ = source->base;
++         templ.flags |= PS5_RESOURCE_FLAG_UNINITIALIZED;
++         storage[stage] = base->screen->resource_create(base->screen, &templ);
++      }
++      copy = (struct ps5_resource *)storage[stage];
+       if (!copy || !copy->data || copy->size != source->size)
+          return false;
+-      memcpy(copy->data, source->data, source->size);
++      /* The draw rewrites every descriptor it uses; only the inline uniform
++       * copies persist across draws, so copy the header, the bound uniform
++       * ranges and the tessellation tail instead of the whole table. */
++      if (stage == 0 || source->size <= PS5_TESSELLATION_BUFFER_OFFSET) {
++         memcpy(copy->data, source->data, source->size);
++         continue;
++      }
++      memcpy(copy->data, source->data, PS5_CONSTANT_DATA_OFFSET);
++      for (unsigned i = 0; i < 4; ++i) {
++         const unsigned slot = storage_slots[stage - 1][i];
++         if (slot >= PS5_CONSTANT_STAGE_COUNT)
++            continue;
++         const struct ps5_constant_state *state = &context->constants[slot][0];
++         if (!state->valid || !state->copied || !state->size)
++            continue;
++         const size_t offset = ps5_copied_constant_offset(slot);
++         const size_t bytes = MIN2((state->size + 15u) & ~15u,
++                                   PS5_MAX_CONSTANT_BUFFER_SIZE);
++         memcpy(copy->data + offset, source->data + offset, bytes);
++      }
++      memcpy(copy->data + PS5_TESSELLATION_BUFFER_OFFSET,
++             source->data + PS5_TESSELLATION_BUFFER_OFFSET,
++             source->size - PS5_TESSELLATION_BUFFER_OFFSET);
+    }
+    return true;
+ }
+@@ -10604,6 +10685,20 @@
+ #ifdef PS5_DEFERRED_DRAW_BATCH
+ /* Reuse the synchronous runtime queue: nothing is submitted until drain, and
+  * drain waits for every marker before releasing any per-draw allocation. */
++static void
++ps5_deferred_use(struct pipe_resource *base, bool retain)
++{
++   struct ps5_resource *resource = (struct ps5_resource *)base;
++   if (resource) {
++      if (retain)
++         resource->deferred_uses++;
++      else {
++         assert(resource->deferred_uses);
++         resource->deferred_uses--;
++      }
++   }
++}
++
+ static struct {
+    struct ps5_context *owner;
+    unsigned count;
+@@ -10644,12 +10739,20 @@
+       fflush(stderr);
+       _Exit(EXIT_FAILURE);
+    }
+-   printf("[ps5-deferred-batch] draws=%u result=0\n", ps5_deferred.count);
++#ifdef PS5_DRAW_PROFILE
++   printf("[ps5-deferred-batch] draws=%u result=0 flush=%s\n", ps5_deferred.count,
++           ps5_deferred_flush_reason);
++#endif
++   ps5_deferred_flush_reason = "";
+    for (unsigned slot = 0; slot < ps5_deferred.count; ++slot) {
+-      for (unsigned stage = 0; stage < 3; ++stage)
++      for (unsigned stage = 0; stage < 3; ++stage) {
++         ps5_deferred_use(ps5_deferred.slots[slot].storage[stage], false);
+          pipe_resource_reference(&ps5_deferred.slots[slot].storage[stage], NULL);
+-      for (unsigned i = 0; i < ps5_deferred.slots[slot].retained_count; ++i)
++      }
++      for (unsigned i = 0; i < ps5_deferred.slots[slot].retained_count; ++i) {
++         ps5_deferred_use(ps5_deferred.slots[slot].retained[i], false);
+          pipe_resource_reference(&ps5_deferred.slots[slot].retained[i], NULL);
++      }
+    }
+    memset(&ps5_deferred, 0, sizeof(ps5_deferred));
+ }
+@@ -10688,11 +10791,21 @@
+ }
+ 
+ static void
+-ps5_draw_batch_drain_buffer(struct pipe_resource *base)
++ps5_draw_batch_drain_buffer_from(struct pipe_resource *base, const char *who)
+ {
+    const struct ps5_resource *buffer = (const struct ps5_resource *)base;
+    simple_mtx_lock(&ps5_deferred_mutex);
+    if (ps5_deferred.owner) {
++      ps5_deferred_flush_reason = who;
++      /* Driver-created buffers have exclusive allocations (or disjoint arena
++       * slots). All GPU references are retained until retirement, so a use
++       * count replaces the quadratic scan for streaming vertex uploads. */
++      if (base && base->target == PIPE_BUFFER && buffer->exclusive_buffer_storage) {
++         if (buffer->deferred_uses)
++            ps5_draw_batch_flush_locked();
++         simple_mtx_unlock(&ps5_deferred_mutex);
++         return;
++      }
+       /* ponytail: whole allocations, bounded by the batch capacity. Range tracking only
+        * if conservative alias/arena overlap becomes a measured bottleneck. */
+       bool hazard = !base || base->target != PIPE_BUFFER;
+@@ -10722,11 +10835,29 @@
+    bool handled = false;
+ 
+    simple_mtx_lock(&ps5_deferred_mutex);
+-   if (ps5_deferred.owner && ps5_deferred.owner != context)
++   if (ps5_deferred.owner && ps5_deferred.owner != context) {
++      ps5_deferred_flush_reason = "context";
+       ps5_draw_batch_flush_locked();
++   }
+    if (!ps5_agc_gate2_batch_begin || !ps5_agc_gate2_batch_end || num_draws != 1 ||
+-       (context->blitter && context->blitter->running && !context->deferred_color_clear) ||
++       (context->blitter && context->blitter->running && !context->deferred_clear) ||
+        !ps5_multidraw_eligible(context, info, indirect, draws, num_draws)) {
++      static char ineligible[160];
++      const struct pipe_resource *depth = context->framebuffer.zsbuf.texture;
++      const struct pipe_resource *target = context->framebuffer.nr_cbufs
++         ? context->framebuffer.cbufs[0].texture : NULL;
++      snprintf(ineligible, sizeof(ineligible),
++               "ineligible:mode=%u index=%u draws=%u blitter=%d gs=%d cbufs=%u "
++               "target=%u depth=%u fs-storage=%d vs-tex=%u so=%u query=%d",
++               info ? info->mode : 99u, info ? info->index_size : 0u, num_draws,
++               context->blitter && context->blitter->running, context->gs != NULL,
++               context->framebuffer.nr_cbufs, target ? target->format : 0u,
++               depth ? depth->format : 0u, ps5_shader_uses_storage(context->fs),
++               ps5_shader_texture_count(context->vs),
++               context->stream_output_target_count,
++               context->render_condition_query != NULL ||
++                  context->active_occlusion_query != NULL);
++      ps5_deferred_flush_reason = ineligible;
+       ps5_draw_batch_flush_locked();
+       goto out;
+    }
+@@ -10735,10 +10866,18 @@
+       handled = true;
+       goto out;
+    }
++   const unsigned cache_slot = ps5_deferred.count;
++   if (cache_slot < PS5_DESCRIPTOR_CACHE_SLOTS)
++      for (unsigned stage = 0; stage < 3; ++stage)
++         pipe_resource_reference(&storage[stage], context->descriptor_cache[cache_slot][stage]);
+    if (!ps5_batch_copy_descriptors(base, saved, storage)) {
++      ps5_deferred_flush_reason = "descriptor-alloc";
+       ps5_draw_batch_flush_locked();
+       goto out; /* Allocation failure falls back only before this draw stages. */
+    }
++   if (cache_slot < PS5_DESCRIPTOR_CACHE_SLOTS)
++      for (unsigned stage = 0; stage < 3; ++stage)
++         pipe_resource_reference(&context->descriptor_cache[cache_slot][stage], storage[stage]);
+    if (!ps5_deferred.owner) {
+       if (ps5_agc_gate2_batch_begin() != 0) {
+          context->last_draw_status = -30;
+@@ -10754,6 +10893,10 @@
+    }
+    ps5_deferred.slots[slot].retained_count = ps5_batch_retain_resources(
+       context, info, ps5_deferred.slots[slot].retained);
++   for (unsigned stage = 0; stage < 3; ++stage)
++      ps5_deferred_use(ps5_deferred.slots[slot].storage[stage], true);
++   for (unsigned i = 0; i < ps5_deferred.slots[slot].retained_count; ++i)
++      ps5_deferred_use(ps5_deferred.slots[slot].retained[i], true);
+    context->vertex_descriptor_table = ps5_deferred.slots[slot].storage[0];
+    context->descriptor_storage[0] = ps5_deferred.slots[slot].storage[1];
+    context->descriptor_storage[1] = ps5_deferred.slots[slot].storage[2];
+@@ -10764,8 +10907,10 @@
+    context->descriptor_storage[0] = saved[1];
+    context->descriptor_storage[1] = saved[2];
+    handled = true;
+-   if (context->last_draw_status || ps5_deferred.count == PS5_MULTIDRAW_BATCH_CAPACITY)
++   if (context->last_draw_status || ps5_deferred.count == PS5_MULTIDRAW_BATCH_CAPACITY) {
++      ps5_deferred_flush_reason = context->last_draw_status ? "draw-status" : "capacity";
+       ps5_draw_batch_flush_locked();
++   }
+ out:
+    for (unsigned stage = 0; stage < 3; ++stage)
+       pipe_resource_reference(&storage[stage], NULL);
+@@ -11354,7 +11499,7 @@
+    util_format_unpack_rgba(surface->format, quantized.ui, packed, 1);
+    /* Only this validated color operation may defer its internal fan. The
+     * caller has already completed any CPU depth/stencil part of a mixed clear. */
+-   context->deferred_color_clear = buffers == PIPE_CLEAR_COLOR0 && !scissor_state &&
++   context->deferred_clear = buffers == PIPE_CLEAR_COLOR0 && !scissor_state &&
+                                   surface->format == PIPE_FORMAT_R8G8B8A8_UNORM;
+    if (scissor_state) {
+       struct pipe_surface selected = *surface;
+@@ -11364,7 +11509,7 @@
+       util_blitter_clear(blitter, context->framebuffer.width, context->framebuffer.height,
+                          1, PIPE_CLEAR_COLOR0, &quantized, 0, 0, false);
+    }
+-   context->deferred_color_clear = false;
++   context->deferred_clear = false;
+    context->viewport_valid = viewport_valid;
+    context->framebuffer_valid = framebuffer_valid;
+    context->queries_enabled = queries_enabled;
+@@ -11383,12 +11528,18 @@
+                             const struct pipe_scissor_state *scissor_state,
+                             double depth, unsigned stencil)
+ {
+-   /* Full depth memset is already fast; pay a draw round trip only for large
+-    * per-pixel clears. Partial stencil masks retain the checked CPU merge. */
++   /* A full depth memset must first drain the deferred draw batch; when draws
++    * are batched, a queued clear draw avoids both the drain and the fill.
++    * Partial stencil masks retain the checked CPU merge. */
++#ifdef PS5_DEFERRED_DRAW_BATCH
++   const bool batched = ps5_agc_gate2_batch_begin && ps5_agc_gate2_batch_end;
++#else
++   const bool batched = false;
++#endif
+    if (!PS5_ENABLE_MRT_CANDIDATE || !context || !context->framebuffer_valid ||
+        !(buffers & (PIPE_CLEAR_DEPTH | PIPE_CLEAR_STENCIL)) ||
+        (buffers & ~(PIPE_CLEAR_DEPTH | PIPE_CLEAR_STENCIL)) ||
+-       (!scissor_state && !(buffers & PIPE_CLEAR_STENCIL)) ||
++       (!scissor_state && !(buffers & PIPE_CLEAR_STENCIL) && !batched) ||
+        ((buffers & PIPE_CLEAR_STENCIL) && stencil_clear_mask != 0xff) ||
+        ((buffers & PIPE_CLEAR_DEPTH) && !(depth >= 0.0 && depth <= 1.0)) ||
+        context->render_condition_query || context->stream_output_target_count ||
+@@ -11445,8 +11596,12 @@
+    util_blitter_save_viewport(blitter, &context->viewport[0]);
+    util_blitter_save_sample_mask(blitter, context->sample_mask, 1);
+    util_blitter_save_framebuffer(blitter, &context->framebuffer);
++   /* A full-frame depth-only clear is the same fan quad as the color clear
++    * and may queue behind the batch instead of draining it. */
++   context->deferred_clear = batched && !scissor_state && buffers == PIPE_CLEAR_DEPTH;
+    util_blitter_clear_depth_stencil(blitter, &surface, buffers, depth, stencil,
+                                      left, bottom, right - left, top - bottom);
++   context->deferred_clear = false;
+    context->viewport_valid = viewport_valid;
+    context->framebuffer_valid = framebuffer_valid;
+    context->queries_enabled = queries_enabled;
+@@ -11456,6 +11611,26 @@
+       printf("[ps5-gallium] clear-gpu-depth-stencil status=%d draws=%u\n",
+              context->last_draw_status, context->draw_calls - draws_before);
+    return true; /* Handled even on failure: never replay an attempted GPU operation. */
++}
++
++/* Fill with non-temporal stores; the data reaches memory without passing through the
++ * CPU cache, so no clflush pass is needed before the GPU reads it. */
++static void
++ps5_stream_fill32(void *dst, uint32_t value, size_t bytes)
++{
++   uint32_t *d = dst;
++   size_t n = bytes / sizeof(uint32_t);
++   while (n && ((uintptr_t)d & 15u)) {
++      __builtin_nontemporal_store(value, d++);
++      --n;
++   }
++   typedef uint32_t v4u __attribute__((vector_size(16)));
++   const v4u v = {value, value, value, value};
++   for (; n >= 4; n -= 4, d += 4)
++      __builtin_nontemporal_store(v, (v4u *)d);
++   while (n--)
++      __builtin_nontemporal_store(value, d++);
++   __asm__ volatile("sfence" ::: "memory");
+ }
+ 
+ static bool
+@@ -11583,8 +11758,8 @@
+          uint8_t *layer_data = resource->data + layer * depth_layer_size;
+ 
+          if (!scissor_state) {
+-            util_memset32(layer_data, clear_bits,
+-                          depth_layer_size / sizeof(clear_bits));
++            ps5_stream_fill32(layer_data, clear_bits, depth_layer_size);
++            continue;
+          } else {
+             unsigned min_x, min_y, max_x, max_y;
+ 
+@@ -11674,7 +11849,10 @@
+    struct ps5_context *context = (struct ps5_context *)base;
+    struct ps5_resource *resource;
+ 
+-   ps5_draw_batch_drain();
++   /* GPU clears queue behind the deferred draws; only CPU attachment writes
++    * (and a query-driven render condition) must wait for the batch first. */
++   if (context && context->render_condition_query)
++      ps5_draw_batch_drain();
+    resource = context && context->framebuffer.zsbuf.texture
+                  ? (struct ps5_resource *)context->framebuffer.zsbuf.texture
+                  : NULL;
+@@ -11688,9 +11866,12 @@
+                                       scissor_state, depth, stencil)) {
+          if (context->last_draw_status != 0)
+             return;
+-      } else if (!ps5_clear_depth_stencil(context, depth_buffers, stencil_clear_mask,
+-                                   scissor_state, depth, stencil))
+-         return;
++      } else {
++         ps5_draw_batch_drain();
++         if (!ps5_clear_depth_stencil(context, depth_buffers, stencil_clear_mask,
++                                      scissor_state, depth, stencil))
++            return;
++      }
+       buffers &= ~depth_buffers;
+    }
+    if (!buffers)
+@@ -11700,6 +11881,7 @@
+       if (!buffers || context->last_draw_status != 0)
+          return;
+    }
++   ps5_draw_batch_drain();
+    if (PS5_ENABLE_MSAA4_CANDIDATE && context &&
+        context->framebuffer_valid &&
+        ps5_clear_msaa4_color(context, buffers, color_clear_mask,
+@@ -14964,6 +15146,11 @@
+    unsigned index;
+ 
+    ps5_draw_batch_drain();
++#ifdef PS5_DEFERRED_DRAW_BATCH
++   for (unsigned slot = 0; slot < PS5_DESCRIPTOR_CACHE_SLOTS; ++slot)
++      for (unsigned stage = 0; stage < 3; ++stage)
++         pipe_resource_reference(&context->descriptor_cache[slot][stage], NULL);
++#endif
+    for (index = 0; index < PS5_COMPUTE_BUFFER_SLOTS; ++index)
+       pipe_resource_reference(&context->compute_buffers[index].buffer, NULL);
+    for (index = 0; index < PS5_COMPUTE_STORAGE_SLOTS; ++index)
+--- a/src/platform/ps5_agc_native_runtime.c
++++ b/src/platform/ps5_agc_native_runtime.c
+@@ -892,6 +892,63 @@
+ }
+ #endif
+ 
++/* Per-draw work memory stays mapped after its batch retires and is reused by
++ * later draws: mapping and releasing direct memory for every draw dominated
++ * batch cleanup. Blocks are sized for any shader pair so they interchange. */
++#define RUNTIME_WORK_BLOCK_BYTES 0x40000u
++#define RUNTIME_WORK_POOL_CAPACITY 288u
++struct runtime_work_block {
++    void *memory;
++    int64_t direct;
++    size_t bytes;
++};
++static struct runtime_work_block runtime_work_pool[RUNTIME_WORK_POOL_CAPACITY];
++static unsigned runtime_work_pool_count;
++
++static int runtime_work_acquire(int64_t direct_limit, size_t bytes,
++                                uint8_t **memory, int64_t *direct,
++                                size_t *block_bytes)
++{
++    for (unsigned i = runtime_work_pool_count; i-- > 0;) {
++        struct runtime_work_block *block = &runtime_work_pool[i];
++        if (block->bytes < bytes)
++            continue;
++        *memory = block->memory;
++        *direct = block->direct;
++        *block_bytes = block->bytes;
++        *block = runtime_work_pool[--runtime_work_pool_count];
++        return 0;
++    }
++    size_t size = bytes > RUNTIME_WORK_BLOCK_BYTES ? bytes : RUNTIME_WORK_BLOCK_BYTES;
++    int64_t start = -1;
++    void *map = NULL;
++    int rc = sceKernelAllocateDirectMemory(0, direct_limit, size, 0x4000,
++                                           DIRECT_MEMORY_TYPE, &start);
++    if (rc != 0)
++        return rc;
++    rc = sceKernelMapDirectMemory(&map, size, MAP_PROTECTION, 0, start, 0x4000);
++    if (rc != 0 || !map) {
++        sceKernelReleaseDirectMemory(start, size);
++        return rc != 0 ? rc : -1;
++    }
++    *memory = map;
++    *direct = start;
++    *block_bytes = size;
++    return 0;
++}
++
++static int runtime_work_release(void *memory, int64_t direct, size_t bytes)
++{
++    if (runtime_work_pool_count < RUNTIME_WORK_POOL_CAPACITY) {
++        runtime_work_pool[runtime_work_pool_count++] =
++            (struct runtime_work_block){memory, direct, bytes};
++        return 0;
++    }
++    if (munmap(memory, bytes) != 0)
++        return -1;
++    return sceKernelReleaseDirectMemory(direct, bytes);
++}
++
+ #ifdef PS5_MULTIDRAW_BATCH
+ #ifdef PS5_DRAW_PROFILE
+ #include "util/os_time.h"
+@@ -967,7 +1024,7 @@
+     if (attempted && runtime_batch_api.suspend_point() != 0)
+         result = 1;
+     BATCH_PROFILE_MARK(2);
+-    for (; attempted && waits < 2000; ++waits) {
++    for (; attempted && waits < 100000; ++waits) {
+         int complete = 1;
+         for (unsigned i = 0; i < attempted; ++i) {
+             struct runtime_batch_entry *entry = &runtime_batch_entries[i];
+@@ -976,17 +1033,19 @@
+         }
+         if (complete)
+             break;
+-        sceKernelUsleep(UINT32_C(1000));
+-    }
+-    result |= waits == 2000;
++        sceKernelUsleep(UINT32_C(20));
++    }
++    result |= waits == 100000;
+     BATCH_PROFILE_MARK(3);
++#ifndef PS5_DRAW_PROFILE
++    if (result)
++#endif
+     printf("[ps5-multidraw-batch] draws=%u attempted=%u waits=%u result=%d\n",
+            runtime_batch_count, attempted, waits, result);
+     runtime_require_retirement(result == 0);
+     for (unsigned i = 0; i < runtime_batch_count; ++i) {
+         struct runtime_batch_entry *entry = &runtime_batch_entries[i];
+-        if (munmap(entry->memory, entry->bytes) != 0 ||
+-            sceKernelReleaseDirectMemory(entry->direct, entry->bytes) != 0) {
++        if (runtime_work_release(entry->memory, entry->direct, entry->bytes) != 0) {
+             runtime_batch_faulted = 1;
+ #ifdef PS5_DRAW_PROFILE
+             if (profile)
+@@ -2541,7 +2600,7 @@
+     size_t vs_header_at = WORK_BYTES, vs_code_at = 0;
+     size_t ps_header_at = 0, ps_code_at = 0;
+     size_t tess_descriptors_at = 0;
+-    size_t work_bytes = WORK_BYTES;
++    size_t work_bytes = WORK_BYTES, work_block_bytes = 0;
+ #ifndef PS5_NATIVE_TITLE_RUNTIME
+     void *agc_module = NULL, *driver_module = NULL, *video_module = NULL;
+ #endif
+@@ -2787,13 +2846,10 @@
+         goto cleanup;
+     }
+ #endif
+-    work_alloc_rc = sceKernelAllocateDirectMemory(
+-        0, direct_limit, work_bytes, 0x4000, DIRECT_MEMORY_TYPE, &work_start);
+-    if (work_alloc_rc == 0)
+-        work_map_rc = sceKernelMapDirectMemory(
+-            (void **)&memory, work_bytes, MAP_PROTECTION, 0, work_start,
+-            0x4000);
+-    if (work_alloc_rc != 0 || work_map_rc != 0 || !memory)
++    work_alloc_rc = runtime_work_acquire(direct_limit, work_bytes, &memory,
++                                         &work_start, &work_block_bytes);
++    work_map_rc = work_alloc_rc;
++    if (work_alloc_rc != 0 || !memory)
+         goto receipt;
+     if (runtime_hs_package) {
+         uintptr_t factor = (uintptr_t)(memory + WORK_BYTES +
+@@ -3114,7 +3170,7 @@
+      * Keep the full flush for a new batch, pool, or nonbatched caller. */
+     if (!runtime_batch_active || !runtime_batch_count || !runtime_video_registered ||
+         framebuffer != runtime_video_framebuffer ||
+-        framebuffer_pool_bytes != runtime_video_framebuffer_size)
++        framebuffer_pool_bytes > runtime_video_framebuffer_size)
+ #endif
+     flush_gpu_data(framebuffer, framebuffer_pool_bytes);
+     PS5_PROFILE_MARK(2);
+@@ -3742,7 +3798,7 @@
+     PS5_PROFILE_MARK(5);
+ #ifdef PS5_MULTIDRAW_BATCH
+     if (runtime_batch_active) {
+-        if (runtime_batch_queue(&agc, &submit, memory, work_start, work_bytes,
++        if (runtime_batch_queue(&agc, &submit, memory, work_start, work_block_bytes,
+                                 completion_marker, (uint32_t)render_marker) != 0)
+             goto receipt;
+         memory = NULL;
+@@ -4190,9 +4246,7 @@
+         framebuffer_release_rc = sceKernelReleaseDirectMemory(
+             framebuffer_start, FRAMEBUFFER_POOL_BYTES);
+     if (memory)
+-        work_unmap_rc = munmap(memory, work_bytes);
+-    if (work_start >= 0 && work_unmap_rc == 0)
+-        work_release_rc = sceKernelReleaseDirectMemory(work_start, work_bytes);
++        work_release_rc = runtime_work_release(memory, work_start, work_block_bytes);
+ #if defined(AGC_RUNTIME_PACKAGES) && !defined(AGC_RUNTIME_DIAGNOSTICS)
+     if (work_unmap_rc != 0 || work_release_rc != 0)
+ #endif
+--- a/toolchain/ps5-opengl-core33.mk
++++ b/toolchain/ps5-opengl-core33.mk
+@@ -22,7 +22,7 @@
+ PS5_OPENGL_PUBLIC_CFLAGS := -DGL_GLEXT_PROTOTYPES=1 \
+ 	-I$(PS5_OPENGL_MESA_SRC)/include
+ 
+-PS5_OPENGL_COMMON_CFLAGS := -std=c11 -Os -g -Wall -Wextra -Werror \
++PS5_OPENGL_COMMON_CFLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror \
+ 	-ffunction-sections -fdata-sections -DHAVE_FUNC_ATTRIBUTE_PACKED=1 \
+ 	-I$(PS5_OPENGL_MESA_BUILD)/src \
+ 	-I$(PS5_OPENGL_MESA_SRC)/src \
