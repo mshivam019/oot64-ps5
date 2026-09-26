@@ -77,8 +77,9 @@ PPSA99620/
 
 ## Credits
 
-- [Harbour Masters](https://github.com/HarbourMasters): Ship of Harkinian and
-  [libultraship](https://github.com/kenix3/libultraship)
+- [Harbour Masters](https://github.com/HarbourMasters): Ship of Harkinian,
+  [libultraship](https://github.com/kenix3/libultraship) and the Ship of Harkinian icon
+  used for the launcher art
 - [BlackBearReloaded](https://github.com/blackbearreloaded):
   [ps5-opengl](https://github.com/blackbearreloaded/ps5-opengl) and
   [ps5-native-app-boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
@@ -89,5 +90,11 @@ PPSA99620/
 - [Kenney](https://kenney.nl/assets/input-prompts): CC0 controller prompt artwork
 
 See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## License
+
+The port's own code, scripts and patches are licensed under the
+[GNU General Public License v3.0 or later](LICENSE). The projects it builds on keep
+their own licenses; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Not affiliated with Nintendo or Sony. The Legend of Zelda is a trademark of Nintendo.
