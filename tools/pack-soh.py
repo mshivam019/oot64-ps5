@@ -22,7 +22,7 @@ ROOT = Path(os.environ.get("PS5SDK_ROOT", "/opt/ps5sdk"))
 TEMPLATE = Path(os.environ.get("PS5_NATIVE_APP_TEMPLATE", ROOT / "native-app-boilerplate"))
 GL_ROOT = Path(os.environ.get("PS5_OPENGL_ROOT", ROOT / "ps5-opengl-030/ps5-opengl"))
 GL_PREFIX = Path(os.environ.get("PS5_OPENGL_SDK", ROOT / "extracted/ps5-opengl-sdk-0.3.0/sdk"))
-SDL_PREFIX = GL_ROOT / "build/sdl2-native/sdk"
+SDL_PREFIX = Path(os.environ.get("PS5_SDL2_PREFIX", GL_ROOT / "build/sdl2-native/sdk"))
 BUILD = Path(os.environ.get("SOH_BUILD", ROOT / "build/soh-ps5"))
 SOURCE = Path(os.environ.get("SOH_SOURCE", ROOT / "src/Shipwright"))
 ART = REPO / "ps5/art"
@@ -59,7 +59,7 @@ def soh_link_inputs():
     for token in shlex.split(libs_line):
         path = Path(token) if token.startswith("/") else BUILD / token
         # The GL runtime is linked explicitly from GL_PREFIX below.
-        if path.name.startswith("libPS5OpenGL"):
+        if path.name.startswith("libPS5OpenGL") or path.name == "libSDL2.a":
             continue
         if token.endswith((".a", ".o")) and path.is_file():
             libraries.append(path)
@@ -72,6 +72,12 @@ def main():
     parser.add_argument("--heap-mib", type=int, default=2048,
                         help="app heap reserved from direct memory (default 2048)")
     args = parser.parse_args()
+    profile_path = GL_PREFIX / "share/soh-build-profile.json"
+    profile = json.loads(profile_path.read_text()) if profile_path.exists() else None
+    if profile:
+        receipt = json.loads((SDL_PREFIX / "share/SDL2/receipt.json").read_text())
+        if receipt.get("display_profile") != profile["display_profile"]:
+            raise SystemExit("SDL and GL display profiles do not match")
     out = args.out.resolve()
     if out.exists():
         shutil.rmtree(out)
@@ -184,6 +190,8 @@ def main():
     if "PosixForWebKit" in needed:
         raise SystemExit("eboot still imports libScePosixForWebKit")
     app = out / "dist" / TITLE_ID
+    if profile:
+        (app / "build-profile.json").write_text(json.dumps(profile, indent=2) + "\n")
     print(f"Ship of Harkinian title folder: {app}")
 
 

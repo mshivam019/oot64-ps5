@@ -18,7 +18,7 @@ ps5_path(PS5SDK_ROOT PS5SDK_ROOT /opt/ps5sdk)
 ps5_path(PS5_BOILERPLATE PS5_NATIVE_APP_TEMPLATE ${PS5SDK_ROOT}/native-app-boilerplate)
 ps5_path(PS5_OPENGL_PREFIX PS5_OPENGL_SDK ${PS5SDK_ROOT}/extracted/ps5-opengl-sdk-0.3.0/sdk)
 ps5_path(PS5_OPENGL_ROOT PS5_OPENGL_ROOT ${PS5SDK_ROOT}/ps5-opengl-030/ps5-opengl)
-set(PS5_SDL2_PREFIX ${PS5_OPENGL_ROOT}/build/sdl2-native/sdk)
+ps5_path(PS5_SDL2_PREFIX PS5_SDL2_PREFIX ${PS5_OPENGL_ROOT}/build/sdl2-native/sdk)
 set(PS5_DEPS_PREFIX ${PS5SDK_ROOT}/prefix)
 
 set(PS5_PAYLOAD_SDK ${PS5_BOILERPLATE}/.deps/native/ps5-payload-sdk)

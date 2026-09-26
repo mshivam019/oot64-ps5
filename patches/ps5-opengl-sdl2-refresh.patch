@@ -1,0 +1,52 @@
+--- a/integration/SDL2/SDL_ps5g19.c
++++ b/integration/SDL2/SDL_ps5g19.c
+@@ -22,6 +22,21 @@
+     int interval;
+ } G19;
+ 
++/* Rate the runtime actually drives the display at; high refresh is only used
++ * when the display accepted it, so start from 60 until presentation says so. */
++extern int ps5_opengl_output_refresh_hz(void) __attribute__((weak));
++
++static void sync_refresh_rate(SDL_Window *window)
++{
++    SDL_VideoDisplay *display = SDL_GetDisplayForWindow(window);
++    int hz = ps5_opengl_output_refresh_hz ? ps5_opengl_output_refresh_hz() : 60;
++    if (!display || display->current_mode.refresh_rate == hz) return;
++    display->current_mode.refresh_rate = display->desktop_mode.refresh_rate = hz;
++    for (int i = 0; i < display->num_display_modes; ++i)
++        display->display_modes[i].refresh_rate = hz;
++    window->fullscreen_mode.refresh_rate = hz;
++}
++
+ static int egl_error(const char *operation)
+ {
+     return SDL_SetError("G19 %s: EGL error 0x%04x", operation, eglGetError());
+@@ -38,7 +53,7 @@
+     G19 *g = _this->driverdata;
+     int index;
+     SDL_DisplayMode mode = { SDL_PIXELFORMAT_ABGR8888, PS5_OPENGL_NATIVE_WIDTH,
+-                            PS5_OPENGL_NATIVE_HEIGHT, PS5_OPENGL_NATIVE_FPS, NULL };
++                            PS5_OPENGL_NATIVE_HEIGHT, 60, NULL };
+     g->thread = SDL_ThreadID();
+     g->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+     if (g->display == EGL_NO_DISPLAY) return egl_error("eglGetDisplay");
+@@ -111,6 +126,7 @@
+                             width, height, window->w, window->h);
+     g->interval = 1;
+     SDL_SetKeyboardFocus(window); /* SDL also uses focus to gate joystick events. */
++    sync_refresh_rate(window);
+     return 0;
+ }
+ 
+@@ -194,7 +210,9 @@
+     G19 *g = _this->driverdata;
+     if (on_thread(g) < 0) return -1;
+     if (window != g->window) return SDL_SetError("G19 unknown window");
+-    return eglSwapBuffers(g->display, g->surface) ? 0 : egl_error("eglSwapBuffers");
++    if (!eglSwapBuffers(g->display, g->surface)) return egl_error("eglSwapBuffers");
++    sync_refresh_rate(window); /* The display is opened on first presentation. */
++    return 0;
+ }
+ 
+ static void destroy_window(_THIS, SDL_Window *window)

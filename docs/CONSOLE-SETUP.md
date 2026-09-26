@@ -62,9 +62,15 @@ mean its hooks are currently enabled.
 
 ## Display and frame rate
 
-The validated graphics SDK profile is **1080p60**. An earlier 120 Hz profile failed
-the console's output-support check on the connected TV/link and produced a blank
-screen. Support for 1080p120 on another display has not been established here.
+Build profiles set the render size and refresh request: `1080p60`, `1440p60`, `2160p60`,
+or a `p120` variant (`tools/build-profile.sh`). The game never requests an output
+resolution; the console scales the rendered image to the TV. `2160p120` has been tested
+on a 4K60 monitor and a 1080p60 TV.
+
+A `p120` build asks for 120 Hz only if the display reports support. If it does not, or
+the request fails, the runtime restores the output mode and continues at 60 Hz, and SDL
+reports the rate actually in use. An earlier build that required 120 Hz produced a blank
+screen on a display without it. 120 Hz output on a supporting display is unverified.
 
 Use 60 FPS interpolation for normal play. The scheduler can discard expired
 interpolation frames without proportionally slowing the game; this is not proof

@@ -11,18 +11,19 @@ It contains **no game data**. You need your own legally dumped Ocarina of Time R
 
 ## Status
 
-- Boots to the title screen and is playable, at 1080p60 output.
+- Boots to the title screen and is playable. Builds render at 1080p or natively at
+  4K (`tools/build-profile.sh 2160p120`); the console scales the image to the TV.
 - Targets 60 FPS interpolation with the patched graphics driver. Expired interpolated
   frames are skipped to preserve normal game speed under rendering load.
-- Recent console samples reached about 59 FPS without HD textures and 58 FPS with
-  OoT Reloaded HD. These are sampled averages, not a locked-60 guarantee across the game.
+- Recent console samples averaged about 58–59 FPS with OoT Reloaded HD, both at 1080p
+  and at 4K. These are sampled averages, not a locked-60 guarantee across the game.
 - Draws are batched on the GPU.
 - Saves and configuration are stored in the title's data folder.
 - SDL audio works.
 - HD texture archives load through an explicit manifest; optional PlayStation prompts
   match the default bindings (see [Mods](docs/MODS.md)).
-- Output is currently 60 Hz. Higher-refresh output and full-game performance coverage
-  remain unverified.
+- `p120` builds request 120 Hz only when the display reports support and otherwise keep
+  60 Hz. 120 Hz output itself and full-game performance coverage remain unverified.
 
 Tested on firmware 9.00 with standalone **kstuff + ShadowMountPlus** launched by
 Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-SETUP.md).

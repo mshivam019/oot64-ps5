@@ -14,8 +14,13 @@ cd "$PS5_OPENGL_ROOT"
 if ! grep -q "SceAudioOut" integration/SDL2/CMakeLists.txt; then
     patch -p1 < "$REPO/patches/ps5-opengl-sdl2-audio.patch"
 fi
-rm -rf build/sdl2-native
+# Report the refresh rate the runtime actually negotiated, not the build profile's.
+if ! grep -q "sync_refresh_rate" integration/SDL2/SDL_ps5g19.c; then
+    patch -p1 < "$REPO/patches/ps5-opengl-sdl2-refresh.patch"
+fi
+out=${PS5_SDL2_BUILD:-$PS5_OPENGL_ROOT/build/sdl2-native}
+rm -rf "$out"
 python3 integration/SDL2/build.py native --sdl-source "$sdl" --sdk-prefix "$PS5_OPENGL_SDK" \
-    --out build/sdl2-native --payload-sdk "$PS5_PAYLOAD_SDK" \
+    --out "$out" --payload-sdk "$PS5_PAYLOAD_SDK" \
     --compiler-wrapper "$PS5_NATIVE_APP_TEMPLATE/tooling/prospero-clang18"
-ls build/sdl2-native/sdk/lib/libSDL2.a
+ls "$out/sdk/lib/libSDL2.a"

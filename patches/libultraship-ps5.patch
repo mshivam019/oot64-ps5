@@ -44,10 +44,25 @@ index 0000000..4c05aa9
 +        stat64=stat fstat64=fstat lseek64=lseek ftruncate64=ftruncate off64_t=off_t O_LARGEFILE=0)
 +endif()
 diff --git a/include/fast/backends/gfx_opengl.h b/include/fast/backends/gfx_opengl.h
-index 9252985..4a8b80b 100644
+index 9252985..c0d0a01 100644
 --- a/include/fast/backends/gfx_opengl.h
 +++ b/include/fast/backends/gfx_opengl.h
-@@ -119,7 +119,7 @@ class GfxRenderingAPIOGL final : public GfxRenderingAPI {
+@@ -38,6 +38,14 @@ struct ShaderProgram {
+     GLint texture_width_location;
+     GLint texture_height_location;
+     GLint texture_filtering_location;
++#ifdef __PROSPERO__
++    bool frameUniformsValid = false;
++    uint32_t lastFrameCount = 0;
++    float lastNoiseScale = 0.0f;
++    GLint lastTextureFiltering[2] = { -1, -1 };
++    GLint lastTextureWidth[2] = { -1, -1 };
++    GLint lastTextureHeight[2] = { -1, -1 };
++#endif
+ };
+ 
+ struct FramebufferOGL {
+@@ -119,7 +127,7 @@ class GfxRenderingAPIOGL final : public GfxRenderingAPI {
      ShaderProgram* mLastLoadedShader = nullptr;
  
      GLuint mOpenglVbo = 0;
@@ -57,7 +72,7 @@ index 9252985..4a8b80b 100644
  #endif
  
 diff --git a/src/fast/backends/gfx_opengl.cpp b/src/fast/backends/gfx_opengl.cpp
-index c0746d3..223ed86 100644
+index c0746d3..32f36a2 100644
 --- a/src/fast/backends/gfx_opengl.cpp
 +++ b/src/fast/backends/gfx_opengl.cpp
 @@ -28,6 +28,15 @@
@@ -93,7 +108,64 @@ index c0746d3..223ed86 100644
  static void VertexArraySetAttribs(ShaderProgram* prg) {
      size_t numFloats = prg->numFloats;
      size_t pos = 0;
-@@ -276,7 +295,7 @@ std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
+@@ -57,20 +76,56 @@ static void VertexArraySetAttribs(ShaderProgram* prg) {
+ }
+ 
+ void GfxRenderingAPIOGL::SetUniforms(ShaderProgram* prg) const {
++#ifdef __PROSPERO__
++    if (!prg->frameUniformsValid || prg->lastFrameCount != mFrameCount) {
++        glUniform1i(prg->frameCountLocation, mFrameCount);
++        prg->lastFrameCount = mFrameCount;
++    }
++    if (!prg->frameUniformsValid || prg->lastNoiseScale != mCurrentNoiseScale) {
++        glUniform1f(prg->noiseScaleLocation, mCurrentNoiseScale);
++        prg->lastNoiseScale = mCurrentNoiseScale;
++    }
++    prg->frameUniformsValid = true;
++#else
+     glUniform1i(prg->frameCountLocation, mFrameCount);
+     glUniform1f(prg->noiseScaleLocation, mCurrentNoiseScale);
++#endif
++}
++
++#ifdef __PROSPERO__
++static void SetTextureUniform(GLint location, const GLint values[2], GLint cached[2]) {
++    // Uniforms belong to programs, so switching away and back retains the cache.
++    if (cached[0] != values[0] || cached[1] != values[1]) {
++        glUniform1iv(location, 2, values);
++        cached[0] = values[0];
++        cached[1] = values[1];
++    }
+ }
++#endif
+ 
+ void GfxRenderingAPIOGL::SetPerDrawUniforms() {
+     if (mCurrentShaderProgram->usedTextures[0] || mCurrentShaderProgram->usedTextures[1]) {
+         GLint filtering[2] = { textures[mCurrentTextureIds[0]].filtering, textures[mCurrentTextureIds[1]].filtering };
++#ifdef __PROSPERO__
++        SetTextureUniform(mCurrentShaderProgram->texture_filtering_location, filtering,
++                          mCurrentShaderProgram->lastTextureFiltering);
++#else
+         glUniform1iv(mCurrentShaderProgram->texture_filtering_location, 2, filtering);
++#endif
+ 
+         GLint width[2] = { textures[mCurrentTextureIds[0]].width, textures[mCurrentTextureIds[1]].width };
++#ifdef __PROSPERO__
++        SetTextureUniform(mCurrentShaderProgram->texture_width_location, width, mCurrentShaderProgram->lastTextureWidth);
++#else
+         glUniform1iv(mCurrentShaderProgram->texture_width_location, 2, width);
++#endif
+ 
+         GLint height[2] = { textures[mCurrentTextureIds[0]].height, textures[mCurrentTextureIds[1]].height };
++#ifdef __PROSPERO__
++        SetTextureUniform(mCurrentShaderProgram->texture_height_location, height, mCurrentShaderProgram->lastTextureHeight);
++#else
+         glUniform1iv(mCurrentShaderProgram->texture_height_location, 2, height);
++#endif
+     }
+ }
+ 
+@@ -276,7 +331,7 @@ std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
          { "SHADER_NOISE", SHADER_NOISE },
          { "o_three_point_filtering", mCurrentFilterMode == FILTER_THREE_POINT },
          { "append_formula", (InvokeFunc)append_formula },
@@ -102,7 +174,7 @@ index c0746d3..223ed86 100644
          { "GLSL_VERSION", "#version 410 core" },
          { "attr", "in" },
          { "opengles", false },
-@@ -339,7 +358,7 @@ static std::string BuildVsShader(const CCFeatures& cc_features) {
+@@ -339,7 +394,7 @@ static std::string BuildVsShader(const CCFeatures& cc_features) {
                                       { "o_alpha", cc_features.opt_alpha },
                                       { "o_inputs", cc_features.numInputs },
                                       { "update_floats", (InvokeFunc)UpdateFloats },
@@ -111,7 +183,7 @@ index c0746d3..223ed86 100644
                                       { "GLSL_VERSION", "#version 410 core" },
                                       { "attr", "in" },
                                       { "out", "out" },
-@@ -669,19 +688,42 @@ void GfxRenderingAPIOGL::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size
+@@ -669,19 +724,42 @@ void GfxRenderingAPIOGL::DrawTriangles(float buf_vbo[], size_t buf_vbo_len, size
      SetPerDrawUniforms();
  
      // printf("flushing %d tris\n", buf_vbo_num_tris);
@@ -156,7 +228,7 @@ index c0746d3..223ed86 100644
      glGenVertexArrays(1, &mOpenglVao);
      glBindVertexArray(mOpenglVao);
  #endif
-@@ -727,7 +769,7 @@ int GfxRenderingAPIOGL::CreateFramebuffer() {
+@@ -727,7 +805,7 @@ int GfxRenderingAPIOGL::CreateFramebuffer() {
      GLuint clrbuf;
      glGenTextures(1, &clrbuf);
      glBindTexture(GL_TEXTURE_2D, clrbuf);
@@ -165,7 +237,7 @@ index c0746d3..223ed86 100644
      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
      glBindTexture(GL_TEXTURE_2D, 0);
-@@ -770,12 +812,12 @@ void GfxRenderingAPIOGL::UpdateFramebufferParameters(int fb_id, uint32_t width,
+@@ -770,12 +848,12 @@ void GfxRenderingAPIOGL::UpdateFramebufferParameters(int fb_id, uint32_t width,
          if (fb.width != width || fb.height != height || fb.msaa_level != msaa_level) {
              if (msaa_level <= 1) {
                  glBindTexture(GL_TEXTURE_2D, fb.clrbuf);

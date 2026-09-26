@@ -38,8 +38,13 @@ python3 -m venv "$PS5SDK_ROOT/build-tools-venv"
 source "$PS5SDK_ROOT/build-tools-venv/bin/activate"
 python3 -m pip install "meson>=1.4" mako
 tools/build-gl-driver.sh
-export PS5_OPENGL_SDK=$PS5SDK_ROOT/gl-custom/sdk
+export PS5_OPENGL_SDK=$PS5SDK_ROOT/gl-1080p60/sdk
 ```
+
+`PS5_SCANOUT_HEIGHT` (1080, 1440, 2160) and `PS5_SCANOUT_FPS` (60, or 120 for "use
+120 Hz when the display accepts it") select the profile; the SDK is written to
+`$PS5SDK_ROOT/gl-<height>p<fps>/sdk`. `tools/build-profile.sh 2160p120` builds the
+matching driver, SDL2 and title in one step.
 
 This rebuilds the ps5-opengl runtime from the SDK's bundled sources with
 `patches/ps5-opengl-perf.patch`, which cuts the driver's per-draw cost by about 4×:
@@ -53,6 +58,12 @@ This rebuilds the ps5-opengl runtime from the SDK's bundled sources with
 - **HD textures:** backing-keyed batch flush cache avoids redundant flushes after rebinding.
 - **CPU work:** pooled command memory and `-O2` runtime compilation; successful batch
   logging is disabled unless profiling is enabled.
+- **GPU-only memory:** depth, stencil, sampled render targets and the display pool are
+  flushed only after CPU writes, which matters most at 4K.
+- **Shader pairs:** linked shader pairs are cached, so a draw clears and flushes only its
+  register area and command words.
+- **Depth clears:** depth-only clears join the batched draws.
+- **Resolution:** depth and stencil target sizes follow the build's render size.
 
 The first run builds Mesa, which takes about 15 minutes.
 
