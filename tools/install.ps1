@@ -21,6 +21,9 @@ param(
     [switch]$NoLaunch
 )
 $ErrorActionPreference = 'Stop'
+if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
+    throw "curl.exe is required (it ships with Windows 10 1803+ and Windows 11)."
+}
 $TitleId = 'PPSA99620'
 $Src = (Resolve-Path -LiteralPath $Src).ProviderPath
 if (-not (Test-Path -LiteralPath (Join-Path $Src 'eboot.bin') -PathType Leaf)) {

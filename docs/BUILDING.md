@@ -108,7 +108,14 @@ bootstrap has not been re-run from an empty machine.
 
 ## 5. Install
 
-From Windows (PowerShell), after copying the output folder to the PC:
+Verify the packaged folder before copying it anywhere:
+
+```sh
+tools/check-build.sh
+```
+
+It reports every missing, truncated or mislabelled file and exits non-zero on any
+problem. From Windows (PowerShell), after copying the output folder to the PC:
 
 ```powershell
 ./tools/install.ps1 -Src .\PPSA99620 -Console <console-ip>
@@ -120,6 +127,15 @@ The helper expects FTP plus the local PS5Upload engine for stop/register/launch.
 Use `-NoLaunch` for a manual launch workflow and stop the game yourself before
 uploading. Consult [CONSOLE-SETUP.md](CONSOLE-SETUP.md) for the exact tested payloads
 and their startup order. Preserve the title's existing config and saves when updating.
+
+On Windows you can also regenerate `oot.o2r` from your own ROM with the official
+Ship of Harkinian 9.2.3 build, without Linux:
+
+```powershell
+./tools/make-assets.ps1 -Rom <oot.z64> -SoH <soh-windows> -Title .\PPSA99620
+```
+
+To package a build for other people (without game data), see [RELEASING.md](RELEASING.md).
 
 ## Porting notes
 

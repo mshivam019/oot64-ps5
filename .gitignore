@@ -13,6 +13,11 @@ dist/
 *.v64
 *.o2r
 *.otr
+rom/*
+!rom/README.md
+
+# Release archives (see docs/RELEASING.md)
+*.sha256
 
 # Generated art intermediates (see ps5/art/make-art.py)
 ps5/art/*-source.png

@@ -38,20 +38,53 @@ Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-S
 
 ## Installation
 
-1. Build the title folder (see [docs/BUILDING.md](docs/BUILDING.md)), or use a release.
-2. Make sure `PPSA99620/assets/` contains `oot.o2r` (from your ROM) and `soh.o2r`.
-3. Copy the `PPSA99620` folder to the console, e.g. `/mnt/ext1/etaHEN/games/PPSA99620`.
-4. Register the folder with your homebrew launcher and start **Ship of Harkinian** from
-   the home screen.
+From a [release](https://github.com/mshivam019/oot64-ps5/releases), with no compiling:
 
-`tools/install.ps1` automates steps 3–4 from Windows, using FTP and the PS5Upload engine.
+1. Download the archive for your PC (`-windows.zip`, or `-linux.zip` on Linux and
+   macOS), extract it and open a terminal in the extracted folder.
+2. Create `oot.o2r` from your own ROM with the official
+   [Ship of Harkinian 9.2.3](https://github.com/HarbourMasters/Shipwright/releases) PC
+   build and put it in `output/PPSA99620/assets/` (the archive already includes
+   `soh.o2r`). The helper launches SoH once, waits for the extraction and copies the
+   file; close the game when it starts.
+3. Get the `output/PPSA99620` folder onto the console, e.g. at
+   `/mnt/ext1/etaHEN/games/PPSA99620`, and register it with your homebrew launcher.
+   Use whatever you already use (any FTP client such as FileZilla or WinSCP,
+   PS5Upload, …); the `install` helpers below are optional.
+4. Start **Ship of Harkinian** from the home screen.
+
+**Windows** (PowerShell; `install.ps1` also registers and launches the title via PS5Upload):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\make-assets.ps1 -Rom <oot.z64> -SoH <soh-windows folder>
+powershell -ExecutionPolicy Bypass -File tools\install.ps1 -Src .\output\PPSA99620 -Console <console-ip>
+```
+
+**Linux** (needs `curl`; register the folder from your homebrew launcher afterwards):
+
+```sh
+./tools/make-assets.sh --rom <oot.z64> --soh <soh.appimage>
+./tools/install.sh --src output/PPSA99620 --console <console-ip>
+```
+
+**macOS:** use the Linux archive. Run the official `soh.app` once and select your ROM,
+then copy `~/Library/Application Support/com.shipofharkinian.soh/oot.o2r` into
+`output/PPSA99620/assets/`, then copy the folder over as in step 3 (or with
+`./tools/install.sh`).
+
+The archive's `INSTALL.txt` repeats these steps for its platform.
+
+Building from source instead is covered in [docs/BUILDING.md](docs/BUILDING.md);
+[docs/RELEASING.md](docs/RELEASING.md) packages a build for other people.
 
 With the patched driver, set **Interpolation FPS** to **60** in SoH's settings.
 For HD textures and controller glyphs, follow [HD textures and PlayStation prompts](docs/MODS.md).
 
-**120 FPS:** the current build outputs at 60 Hz. A 120 interpolation setting alone
-does not change that. True 120 FPS would require a supported high-refresh output mode
-and frames below 8.33 ms; current HD performance does not meet that budget.
+**120 Hz:** the release is the `2160p120` build. It asks for 120 Hz output when the
+display reports support and otherwise stays at 60 Hz, so it is safe on 60 Hz TVs.
+120 Hz output on a supporting display is untested, and 120 unique frames per second
+would need frames below 8.33 ms; 4K with HD textures runs at about 58 FPS. Keep
+Interpolation FPS at 60. See [Console setup](docs/CONSOLE-SETUP.md#display-and-frame-rate).
 
 ## Layout
 
