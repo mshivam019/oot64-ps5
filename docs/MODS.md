@@ -63,3 +63,7 @@ Changing controller bindings requires a corresponding prompt mapping change.
 HUD action words, shared button background colors and the controller editor's own
 labels are preserved. The generated raw textures use byte-width conversion as well
 as spatial scaling; a pixel-only `HByteScale` produces blank or truncated glyphs.
+
+For the camera-controls build, add `--camera-controls` when generating PlayStation
+prompts. This keeps the native C-button arrows for the D-pad instead of showing
+right-stick icons. Regenerate an older prompt archive when switching layouts.

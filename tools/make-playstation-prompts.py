@@ -90,6 +90,8 @@ def main():
     parser.add_argument("oot", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--cache", type=Path, required=True)
+    parser.add_argument("--camera-controls", action="store_true",
+                        help="Keep native C-button arrows for D-pad controls; replace other prompts")
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
     license_text = download("LICENSE.txt", args.cache)
@@ -98,6 +100,10 @@ def main():
         mappings = dict(MAPPING)
         mappings["icon_item_static/gCBtnSymbolsTex"] = ["playstation_stick_r_left", "playstation_stick_r_down",
                                                        "playstation_stick_r_right"]
+        if args.camera_controls:
+            mappings = {name: symbols for name, symbols in mappings.items()
+                        if not any("playstation_stick_r" in symbol for symbol in
+                                   (symbols if isinstance(symbols, list) else [symbols]))}
         for name, symbols in mappings.items():
             spec = dimensions(base, name)
             if spec is None:

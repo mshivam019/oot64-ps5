@@ -9,6 +9,7 @@ Run in WSL after `ninja soh` has compiled everything (the CMake link step itself
 expected to fail; the real link happens here).
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -160,8 +161,10 @@ def main():
     # build.sh links every stub with --as-needed; the WebKit POSIX module is not loaded
     # for game titles, so anything bound to it would be null at runtime.
     (sdk / "target/lib/libScePosixForWebKit.so").unlink()
-    compiler_rt = Path(run("clang-18", "--print-resource-dir", capture_output=True,
-                           text=True).stdout.strip()) / "lib/linux/libclang_rt.builtins-x86_64.a"
+    compiler_rt_override = os.environ.get("PS5_COMPILER_RT")
+    compiler_rt = (Path(compiler_rt_override) if compiler_rt_override else
+                   Path(run("clang-18", "--print-resource-dir", capture_output=True,
+                            text=True).stdout.strip()) / "lib/linux/libclang_rt.builtins-x86_64.a")
 
     objects, libraries = soh_link_inputs()
     inputs = objects + libraries
@@ -185,12 +188,15 @@ def main():
                 "PACBREW_INCLUDE_PATHS", "PACBREW_STATIC_ARCHIVES", "APP_RUNTIME_MODULES"):
         env[key] = ""
     run("bash", script, "Folder", env=env, cwd=out)
-    needed = run("llvm-readelf-18", "-d", out / "build/llvm-pie.elf",
+    needed = run(shutil.which("llvm-readelf-18") or "llvm-readelf", "-d", out / "build/llvm-pie.elf",
                  capture_output=True, text=True).stdout
     if "PosixForWebKit" in needed:
         raise SystemExit("eboot still imports libScePosixForWebKit")
     app = out / "dist" / TITLE_ID
     if profile:
+        profile["executable_sha256"] = hashlib.sha256((app / "eboot.bin").read_bytes()).hexdigest()
+        profile["controls_variant"] = ("camera-controls" if
+            (SOURCE / "soh/soh/Enhancements/controls/PS5CameraProfile.h").is_file() else "stock")
         (app / "build-profile.json").write_text(json.dumps(profile, indent=2) + "\n")
     print(f"Ship of Harkinian title folder: {app}")
 

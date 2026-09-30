@@ -2,6 +2,7 @@
 # Build a matched GL/SDL title without changing the previously tested SDK/build.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
+bash "$REPO/tools/apply-camera-controls.sh"
 profile=${1:-1080p60}
 case "$profile" in
     4k60) profile=2160p60 ;;

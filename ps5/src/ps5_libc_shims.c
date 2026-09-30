@@ -468,3 +468,9 @@ int zapd_report(int argc, char** argv, void* extractCount, void* totalExtract) {
     (void)totalExtract;
     return 0;
 }
+
+// Fortified memset used by newer compiler-rt emulated TLS implementations.
+void* __memset_chk(void* dst, int value, size_t count, size_t capacity) {
+    if (count > capacity) abort();
+    return memset(dst, value, count);
+}

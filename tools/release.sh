@@ -12,6 +12,7 @@
 #   tools/release.sh /path/to/oot.z64 --profile 2160p120
 #   tools/release.sh --from-dir /opt/ps5sdk/build/soh-2160p120/dist/PPSA99620
 #   tools/release.sh --with-assets            # include ROM-derived .o2r (private)
+#   tools/release.sh --variant camera-controls --profile 2160p120
 #   tools/release.sh --platform windows       # one platform (default: windows + linux)
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
@@ -26,10 +27,12 @@ WITH_ASSETS=0
 SKIP_BOOTSTRAP=0
 PACKAGE=1
 PLATFORM=all
+VARIANT=stock
 OUTDIR=$REPO/dist
 
 while [ $# -gt 0 ]; do
     case $1 in
+        --variant) VARIANT=${2:?--variant needs stock or camera-controls}; shift 2 ;;
         --profile) PROFILE=${2:?--profile needs a value}; shift 2 ;;
         --profile=*) PROFILE=${1#*=}; shift ;;
         --from-dir) FROM_DIR=${2:?--from-dir needs a path}; shift 2 ;;
@@ -46,6 +49,10 @@ while [ $# -gt 0 ]; do
         *) ROM=$1; shift ;;
     esac
 done
+
+case "$VARIANT" in stock|camera-controls) ;; *) echo "Invalid variant: $VARIANT" >&2; exit 2 ;; esac
+
+if [ "$VARIANT" = camera-controls ]; then export SOH_CAMERA_CONTROLS=1; else export SOH_CAMERA_CONTROLS=0; fi
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -115,7 +122,15 @@ else
 fi
 
 log "Verifying the packaged title"
-bash "$REPO/tools/check-build.sh" --dir "$DIST"
+bash "$REPO/tools/check-build.sh" --dir "$DIST" --variant "$VARIANT"
+
+actual_variant=$(python3 - "$DIST/build-profile.json" <<'PYCODE'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+print(json.loads(p.read_text()).get("controls_variant", "stock") if p.exists() else "stock")
+PYCODE
+)
+[ "$actual_variant" = "$VARIANT" ] || die "build contains $actual_variant controls, requested $VARIANT"
 
 if [ "$PACKAGE" = 0 ]; then
     log "Done: $DIST"
@@ -137,7 +152,7 @@ case $platforms in
     windows | linux) ;;
     *) die "--platform must be all, windows or linux (got: $platforms)" ;;
 esac
-command -v zip >/dev/null 2>&1 || die "zip is required to package the release"
+command -v python3 >/dev/null 2>&1 || die "python3 is required to package the release"
 
 mkdir -p "$OUTDIR"
 stage=$(mktemp -d)
@@ -160,6 +175,11 @@ write_install() {
         echo "Ship of Harkinian for PS5 ($TITLE_ID)"
         echo "profile: $profile"
         echo "version: $version"
+        echo "controls: $VARIANT"
+        if [ "$VARIANT" = camera-controls ]; then
+            echo "Right stick: camera. D-pad: C buttons. X/O keep their normal bindings."
+            echo "Uses the stock title ID; install one variant at a time."
+        fi
         echo
         echo "Contents"
         echo "  output/$TITLE_ID/   the title; copy this one folder to the console"
@@ -203,6 +223,7 @@ write_install() {
 made=0
 for platform in $platforms; do
     base=soh-ps5-$profile-$version-$platform
+    if [ "$VARIANT" = camera-controls ]; then base=soh-ps5-$profile-camera-controls-$version-$platform; fi
     if [ "$WITH_ASSETS" = 1 ]; then base=$base-with-assets; fi
     root=$stage/$base
     cp -a "$build" "$root"
@@ -215,7 +236,15 @@ for platform in $platforms; do
     archive=$OUTDIR/$base.zip
     rm -f "$archive" "$archive.sha256"
     log "Packaging $archive"
-    (cd "$stage" && zip -r -9 -q "$archive" "$base")
+    python3 - "$root" "$archive" <<'PYZIP'
+from pathlib import Path
+import sys, zipfile
+root, output = map(Path, sys.argv[1:])
+with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            archive.write(path, path.relative_to(root.parent))
+PYZIP
     (cd "$OUTDIR" && sha256sum "$(basename -- "$archive")" | tee "$(basename -- "$archive").sha256")
     log "Release ready: $archive"
     made=1

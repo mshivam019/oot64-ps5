@@ -1,0 +1,87 @@
+diff --git a/soh/soh/OTRGlobals.cpp b/soh/soh/OTRGlobals.cpp
+--- a/soh/soh/OTRGlobals.cpp
++++ b/soh/soh/OTRGlobals.cpp
+@@ -9,6 +9,7 @@
+ #include <optional>
+ #ifdef __PROSPERO__
+ #include "PS5FramePacer.h"
++#include "Enhancements/controls/PS5CameraProfile.h"
+ #endif
+ 
+ #include "ResourceManagerHelpers.h"
+@@ -1609,6 +1610,10 @@
+ }
+ 
+ extern "C" void Graph_StartFrame() {
++#ifdef __PROSPERO__
++    static const bool profileApplied = [] { ApplyPS5CameraProfile(); return true; }();
++    (void)profileApplied;
++#endif
+ #ifndef __WIIU__
+     using Ship::KbScancode;
+     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();
+diff --git a/soh/soh/Enhancements/controls/PS5CameraProfile.h b/soh/soh/Enhancements/controls/PS5CameraProfile.h
+new file mode 100644
+--- /dev/null
++++ b/soh/soh/Enhancements/controls/PS5CameraProfile.h
+@@ -0,0 +1,60 @@
++#pragma once
++
++#include <libultraship/controller/controldeck/ControlDeck.h>
++#include <ship/Context.h>
++#include <ship/config/ConsoleVariable.h>
++#include <ship/controller/controldevice/controller/Controller.h>
++#include <ship/controller/controldevice/controller/mapping/sdl/SDLButtonToButtonMapping.h>
++
++// Apply once on this variant's first frame. Keep the existing numeric config schema
++// and every face-button mapping; only replace C-stick actions with D-pad actions.
++inline void ApplyPS5CameraProfile() {
++    auto vars = Ship::Context::GetInstance()->GetConsoleVariables();
++    if (vars->GetInteger("gSettings.PS5CameraProfileVersion", 0) >= 1) return;
++    auto controller = Ship::Context::GetInstance()->GetControlDeck()->GetControllerByPort(0);
++    if (controller->HasConfig()) {
++        controller->ReloadAllMappingsFromConfig();
++    } else {
++        // The first frame can precede osContInit. Create the complete defaults
++        // before adding the camera bindings, so X/O are present on a fresh install.
++        controller->AddDefaultMappings(Ship::PhysicalDeviceType::Keyboard);
++        controller->AddDefaultMappings(Ship::PhysicalDeviceType::Mouse);
++        controller->AddDefaultMappings(Ship::PhysicalDeviceType::SDLGamepad);
++    }
++    const struct {
++        CONTROLLERBUTTONS_T cButton;
++        CONTROLLERBUTTONS_T dButton;
++        SDL_GameControllerButton physical;
++    } directions[] = {
++        {BTN_CUP, BTN_DUP, SDL_CONTROLLER_BUTTON_DPAD_UP},
++        {BTN_CDOWN, BTN_DDOWN, SDL_CONTROLLER_BUTTON_DPAD_DOWN},
++        {BTN_CLEFT, BTN_DLEFT, SDL_CONTROLLER_BUTTON_DPAD_LEFT},
++        {BTN_CRIGHT, BTN_DRIGHT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT},
++    };
++    for (const auto& direction : directions) {
++        auto button = controller->GetButton(direction.cButton);
++        for (const auto& [id, mapping] : button->GetAllButtonMappings()) {
++            // IDs are emitted by SDLAxisDirectionToButtonMapping. Preserve
++            // keyboard, mouse, face-button and trigger alternatives.
++            if (id.find("-SDLA2-AD") != std::string::npos ||
++                id.find("-SDLA3-AD") != std::string::npos) {
++                button->ClearButtonMapping(mapping);
++            }
++        }
++        auto mapping = std::make_shared<Ship::SDLButtonToButtonMapping>(0, direction.cButton, direction.physical);
++        button->AddButtonMapping(mapping);
++        mapping->SaveToConfig();
++        button->SaveButtonMappingIdsToConfig();
++
++        auto dpad = controller->GetButton(direction.dButton);
++        const auto oldId = std::make_shared<Ship::SDLButtonToButtonMapping>(0, direction.dButton,
++                                                                        direction.physical)->GetButtonMappingId();
++        if (dpad->GetButtonMappingById(oldId)) dpad->ClearButtonMapping(oldId);
++    }
++    auto camera = controller->GetRightStick();
++    camera->ClearAllMappingsForDeviceType(Ship::PhysicalDeviceType::SDLGamepad);
++    camera->AddDefaultMappings(Ship::PhysicalDeviceType::SDLGamepad);
++    vars->SetInteger("gSettings.FreeLook.Enabled", 1);
++    vars->SetInteger("gSettings.PS5CameraProfileVersion", 1);
++    vars->Save();
++}

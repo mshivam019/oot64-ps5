@@ -60,6 +60,7 @@ Useful flags:
 | --- | --- |
 | `--profile 2160p120` | matched GL/SDL build via `build-profile.sh` (also 1080p60, 1440p60, 2160p60, …) |
 | `--from-dir DIR` | package an existing `PPSA99620` folder, skip the build |
+| `--variant camera-controls` | package the optional right-stick camera build; defaults to stock |
 | `--with-assets` | include the ROM-derived `oot.o2r` (private use only; never distribute) |
 | `--platform windows` | build only one archive (`windows` or `linux`; default both) |
 | `--no-package` | stop after verification, leave the title folder in place |
@@ -119,8 +120,8 @@ headers and metadata are correct:
 
 A release archive as shipped fails exactly one check, the missing `oot.o2r`; after
 `make-assets.ps1`/`make-assets.sh` it passes. `--self-test` builds a synthetic
-title folder, breaks it in 13 ways (missing, truncated or mislabelled files, wrong
-IDs, invalid JSON, stray files) and confirms each is caught.
+title folder, exercises 21 cases (missing, truncated or mislabelled files, wrong
+IDs, invalid JSON, stray files) and confirms invalid folders and mismatched variants are rejected.
 
 ## Publishing to GitHub
 
@@ -147,3 +148,18 @@ uploads the archive and its checksum. Only attach archives built **without**
 There is no CI build job: a clean build needs the PS5 SDK, a Mesa toolchain and
 your ROM, which GitHub-hosted runners cannot provide. A workflow would only make
 sense on a self-hosted runner.
+
+## Camera controls variant
+
+Use a separate source/build directory for the optional camera patch, with
+`SOH_CAMERA_CONTROLS=1`. Package that build with `--variant camera-controls`.
+The title ID and installation steps stay the same as stock; install one variant
+at a time. The original v1.0.0 stock downloads remain available.
+
+`PS5_COMPILER_RT` can select an existing `libclang_rt.builtins-x86_64.a` when
+clang 18 is installed outside the normal executable path.
+
+Use `tools/check-build.sh --dir /path/PPSA99620 --variant camera-controls`
+to require the camera build. Its profile records the controls variant and the
+executable SHA-256; validation rejects a mismatch. Legacy stock builds remain
+supported with `--variant stock`. Release packaging runs this check automatically.

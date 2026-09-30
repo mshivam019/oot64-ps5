@@ -7,6 +7,7 @@
 # Usage:
 #   tools/check-build.sh                      # newest build under $PS5SDK_ROOT/build
 #   tools/check-build.sh --dir /path/PPSA99620
+#   tools/check-build.sh --variant camera-controls --dir /path/to/PPSA99620
 #   tools/check-build.sh --json               # machine-readable summary
 #   tools/check-build.sh --self-test          # check the checker on synthetic folders
 set -uo pipefail
@@ -22,16 +23,20 @@ CONTENT_ID=UP9000-PPSA99620_00-SHIPOFHARKINIAN0
 
 DIR=
 JSON=0
+VARIANT=
 while [ $# -gt 0 ]; do
     case $1 in
         --dir) DIR=${2:?--dir needs a path}; shift 2 ;;
         --dir=*) DIR=${1#*=}; shift ;;
         --json) JSON=1; shift ;;
+        --variant) VARIANT=${2:?--variant needs stock or camera-controls}; shift 2 ;;
         --self-test) SELF_TEST=1; shift ;;
         -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+case "$VARIANT" in ""|stock|camera-controls) ;; *) echo "Invalid controls variant: $VARIANT" >&2; exit 2 ;; esac
 
 # Build a synthetic title folder that passes, then break it one way at a time and
 # confirm each break is caught. Needs no SDK, build or game data.
@@ -66,7 +71,8 @@ PY
 
     expect() {
         local want=$1 name=$2 dir=$3 rc
-        bash "$self" --dir "$dir" >"$work/out" 2>&1
+        shift 3
+        bash "$self" --dir "$dir" "$@" >"$work/out" 2>&1
         rc=$?
         if [ "$rc" = "$want" ]; then
             echo "  ok    $name"
@@ -97,6 +103,23 @@ PY
     c=$(case_dir); : >"$c/sce_sys/snd0.at9"; expect 1 "stray snd0.at9" "$c"
     c=$(case_dir); echo '{' >"$c/build-profile.json"; expect 1 "invalid build-profile.json" "$c"
     c=$(case_dir); echo '{}' >"$c/build-profile.json"; expect 0 "valid build-profile.json" "$c"
+    c=$(case_dir); echo '{"controls_variant":"unknown"}' >"$c/build-profile.json"
+    expect 1 "unknown controls variant" "$c"
+    expect 0 "legacy stock variant accepted" "$work/good" --variant stock
+    expect 1 "stock cannot be labeled camera" "$work/good" --variant camera-controls
+    c=$(case_dir)
+    python3 - "$c" <<'PYFIXTURE'
+import hashlib, json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+(p / "build-profile.json").write_text(json.dumps({"controls_variant": "camera-controls",
+    "executable_sha256": hashlib.sha256((p / "eboot.bin").read_bytes()).hexdigest()}))
+PYFIXTURE
+    expect 0 "camera variant and executable match" "$c" --variant camera-controls
+    expect 1 "camera cannot be labeled stock" "$c" --variant stock
+    printf X >>"$c/eboot.bin"
+    expect 1 "mismatched executable rejected" "$c" --variant camera-controls
+    echo '{"controls_variant":"camera-controls"}' >"$c/build-profile.json"
+    expect 1 "camera profile requires executable hash" "$c"
     expect 1 "nonexistent directory" "$work/missing"
 
     echo
@@ -247,13 +270,37 @@ check_zip assets/oot.o2r
 check_zip assets/soh.o2r
 check_param
 
-if [ -f "$DIR/build-profile.json" ]; then
-    if python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$DIR/build-profile.json" 2>/dev/null; then
-        OK+=("build-profile.json")
-    else
-        FAIL+=("build-profile.json is not valid JSON")
-    fi
+profile_result=$(python3 - "$DIR" "$VARIANT" <<'PYPROFILE'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+expected = sys.argv[2]
+try:
+    path = root / "build-profile.json"
+    profile = json.loads(path.read_text()) if path.exists() else {}
+    if not isinstance(profile, dict):
+        raise ValueError("build-profile.json must be an object")
+    variant = profile.get("controls_variant", "stock")
+    if variant not in ("stock", "camera-controls"):
+        raise ValueError(f"unknown controls variant: {variant!r}")
+    if expected and variant != expected:
+        raise ValueError(f"controls variant is {variant}, expected {expected}")
+    digest = profile.get("executable_sha256")
+    if variant == "camera-controls" and not digest:
+        raise ValueError("camera-controls profile is missing executable_sha256")
+    if digest and digest != hashlib.sha256((root / "eboot.bin").read_bytes()).hexdigest():
+        raise ValueError("build-profile.json executable SHA-256 does not match eboot.bin")
+    print(f"controls variant: {variant}" + ("; executable SHA-256 verified" if digest else " (legacy profile)"))
+except (ValueError, OSError) as error:
+    print(error)
+    sys.exit(1)
+PYPROFILE
+)
+if [ $? -eq 0 ]; then
+    OK+=("$profile_result")
 else
+    FAIL+=("$profile_result")
+fi
+if [ ! -f "$DIR/build-profile.json" ]; then
     WARN+=("no build-profile.json (stock 0.3.0 driver profile)")
 fi
 
