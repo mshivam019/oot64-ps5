@@ -4,6 +4,22 @@ Verified on firmware **9.00** on 2026-09-26 from the console's autoload file,
 process list, ShadowMount log, and the locally supplied payloads. These identify
 the tested setup, not minimum versions for all consoles.
 
+## Tested game assets
+
+The recorded PS5 gameplay/performance tests used **Ocarina of Time US/NTSC v1.2**,
+converted into `oot.o2r` for SoH 9.2.3. The local ROM was rehashed on 2026-10-05
+and matches SoH's pinned supported-ROM list:
+
+- Filename: `Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64`
+- Size: 33,554,432 bytes (32 MiB)
+- SHA-1: `41b3bdc48d98c48529219919015a1af22f5057c2`
+- MD5: `57a9719ad547c516342e1a15d5c28c3d`
+
+These tests establish the tested English asset set. German text needs compatible
+assets containing German message tables and a separate console check; this test
+ROM alone does not establish German support. The new menu/FPS update has not yet
+been tested on console. See [SETTINGS.md](SETTINGS.md).
+
 ## Payloads and startup order
 
 The normal jailbreak is run first. Payload Manager's `/data/pldmgr/autoload.txt`:

@@ -11,7 +11,9 @@ A release archive is laid out so nobody needs Linux or a compiler:
 soh-ps5-<profile>-<version>-windows/     (or -linux/)
 ├── output/
 │   └── PPSA99620/  the title folder (contains soh.o2r, no oot.o2r)
-├── tools/          Windows: make-assets.ps1, install.ps1
+├── SETTINGS.md, MODS.md  language/config and HD texture instructions
+├── tools/          configure-settings.py, index-mods.py
+│                   Windows: make-assets.ps1, install.ps1
 │                   Linux:   make-assets.sh,  install.sh
 ├── INSTALL.txt
 └── CONSOLE-SETUP.md
@@ -104,6 +106,7 @@ any folder:
 ```sh
 tools/check-build.sh                          # newest build under $PS5SDK_ROOT/build
 tools/check-build.sh --dir /path/PPSA99620
+tools/check-build.sh --update --dir /path/PPSA99620  # explicit executable/runtime update
 tools/check-build.sh --json
 tools/check-build.sh --self-test              # test the checker itself; no build needed
 ```
@@ -120,7 +123,7 @@ headers and metadata are correct:
 
 A release archive as shipped fails exactly one check, the missing `oot.o2r`; after
 `make-assets.ps1`/`make-assets.sh` it passes. `--self-test` builds a synthetic
-title folder, exercises 21 cases (missing, truncated or mislabelled files, wrong
+title folder, exercises the full-install, update and mod-manifest cases (missing, truncated or mislabelled files, wrong
 IDs, invalid JSON, stray files) and confirms invalid folders and mismatched variants are rejected.
 
 ## Publishing to GitHub
@@ -163,3 +166,10 @@ Use `tools/check-build.sh --dir /path/PPSA99620 --variant camera-controls`
 to require the camera build. Its profile records the controls variant and the
 executable SHA-256; validation rejects a mismatch. Legacy stock builds remain
 supported with `--variant stock`. Release packaging runs this check automatically.
+
+The `--update` mode requires the executable, matching libc runtime, a recorded
+executable SHA-256, and `game_assets_included=false`. It does not establish a
+complete installation: existing assets and title metadata must be retained.
+Normal mode still rejects missing base archives. Both modes validate optional
+mod manifests, archive paths, duplicate names and archive integrity when mods
+are present. The writable UserData manifest takes precedence over bundled mods.

@@ -166,8 +166,11 @@ if [ "$WITH_ASSETS" = 0 ]; then
     rm -f "$build/output/$TITLE_ID/assets/oot.o2r"
 fi
 cp "$REPO/tools/install.ps1" "$REPO/tools/install.sh" \
-    "$REPO/tools/make-assets.ps1" "$REPO/tools/make-assets.sh" "$build/tools/"
+    "$REPO/tools/make-assets.ps1" "$REPO/tools/make-assets.sh" \
+    "$REPO/tools/index-mods.py" "$REPO/tools/configure-settings.py" "$build/tools/"
 if [ -f "$REPO/docs/CONSOLE-SETUP.md" ]; then cp "$REPO/docs/CONSOLE-SETUP.md" "$build/"; fi
+
+cp "$REPO/docs/SETTINGS.md" "$REPO/docs/MODS.md" "$build/"
 
 write_install() {
     local file=$1 platform=$2
@@ -214,7 +217,10 @@ write_install() {
         fi
         echo "   (or copy output/$TITLE_ID to /mnt/ext1/etaHEN/games/ yourself)"
         echo
-        echo "3. Launch \"Ship of Harkinian\" and set Interpolation FPS to 60 in its settings."
+        echo "3. Launch \"Ship of Harkinian\". See SETTINGS.md for menu, language and FPS setup."
+        echo
+        echo "For HD textures, read MODS.md; index-mods.py is included in tools/."
+        echo "For language and the active config path, read SETTINGS.md."
         echo
         echo "The source repository and its docs/ folder have the full build guide."
     } >"$file"

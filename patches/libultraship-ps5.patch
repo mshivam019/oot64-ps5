@@ -406,7 +406,7 @@ index 88ab182..a4f712b 100644
      return "./" + std::string(path);
  }
 diff --git a/src/ship/window/gui/Gui.cpp b/src/ship/window/gui/Gui.cpp
-index 426a965..f084c81 100644
+index 426a965e..c2d11b8e 100644
 --- a/src/ship/window/gui/Gui.cpp
 +++ b/src/ship/window/gui/Gui.cpp
 @@ -36,6 +36,9 @@
@@ -428,7 +428,35 @@ index 426a965..f084c81 100644
              ImGui_ImplOpenGL3_Init("#version 410 core");
  #elif USE_OPENGLES
              ImGui_ImplOpenGL3_Init("#version 300 es");
-@@ -718,7 +721,17 @@ void Gui::DrawGame() {
+@@ -292,6 +295,27 @@ void Gui::HandleWindowEvents(WindowEvent event) {
+         case WindowBackend::FAST3D_SDL_OPENGL:
+         case WindowBackend::FAST3D_SDL_METAL:
+             ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(event.Sdl.Event));
++#ifdef __PROSPERO__
++            // PS5 SDL exposes touchpad separately; its Back button is unavailable.
++            // Options remains the game's Start/pause/save button.
++            if (const auto* sdlEvent = static_cast<const SDL_Event*>(event.Sdl.Event);
++                sdlEvent->type == SDL_CONTROLLERBUTTONDOWN &&
++                sdlEvent->cbutton.button == SDL_CONTROLLER_BUTTON_TOUCHPAD) {
++                if (GetMenu()) {
++                    GetMenu()->ToggleVisibility();
++                } else if (GetMenuBar()) {
++                    GetMenuBar()->ToggleVisibility();
++                }
++                auto cvars = Ship::Context::GetInstance()->GetConsoleVariables();
++                cvars->SetInteger(CVAR_IMGUI_CONTROLLER_NAV, 1);
++                if (GetMenuOrMenubarVisible()) {
++                    mImGuiIo->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
++                } else {
++                    mImGuiIo->ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
++                }
++                Ship::Context::GetInstance()->GetWindow()->GetMouseStateManager()->UpdateMouseCapture();
++            }
++#endif
+ #if defined(__ANDROID__) || defined(__IOS__)
+             Mobile::ImGuiProcessEvent(mImGuiIo->WantTextInput);
+ #endif
+@@ -718,7 +742,17 @@ void Gui::DrawGame() {
      uintptr_t fb = Ship::Context::GetInstance()->GetWindow()->GetGfxFrameBuffer();
      if (fb) {
          ImGui::SetCursorPos(pos);

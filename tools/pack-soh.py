@@ -72,6 +72,8 @@ def main():
     parser.add_argument("--out", type=Path, default=ROOT / "build/soh-pkg")
     parser.add_argument("--heap-mib", type=int, default=2048,
                         help="app heap reserved from direct memory (default 2048)")
+    parser.add_argument("--without-game-assets", action="store_true",
+                        help="build an update folder without soh.o2r/oot.o2r; preserve installed assets")
     args = parser.parse_args()
     profile_path = GL_PREFIX / "share/soh-build-profile.json"
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else None
@@ -140,8 +142,9 @@ def main():
     (out / "sce_sys/snd0.at9").unlink(missing_ok=True)
 
     # Game data (read-only, /app0/assets on the console).
-    for name in ("soh.o2r", "oot.o2r"):
-        shutil.copy2(SOURCE / name, out / "assets" / name)
+    if not args.without_game_assets:
+        for name in ("soh.o2r", "oot.o2r"):
+            shutil.copy2(SOURCE / name, out / "assets" / name)
     shutil.copy2(BUILD / "gamecontrollerdb.txt", out / "assets/gamecontrollerdb.txt")
 
     replace_once(out / "tooling/native/sce_module_writer.cpp",
@@ -194,6 +197,7 @@ def main():
         raise SystemExit("eboot still imports libScePosixForWebKit")
     app = out / "dist" / TITLE_ID
     if profile:
+        profile["game_assets_included"] = not args.without_game_assets
         profile["executable_sha256"] = hashlib.sha256((app / "eboot.bin").read_bytes()).hexdigest()
         profile["controls_variant"] = ("camera-controls" if
             (SOURCE / "soh/soh/Enhancements/controls/PS5CameraProfile.h").is_file() else "stock")

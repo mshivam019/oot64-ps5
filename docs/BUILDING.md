@@ -160,3 +160,19 @@ To package a build for other people (without game data), see [RELEASING.md](RELE
     but game/audio ticks are preserved. This prevents the previous proportional
     slow motion when a 60 FPS target cannot be met. It still requires at least one
     rendered frame plus game work to fit within a game tick.
+
+## Menu and settings update without game archives
+
+To build an executable update while keeping an existing installation's assets,
+compile the patched source as usual, then run:
+
+```sh
+python3 tools/pack-soh.py --without-game-assets --out "$PS5SDK_ROOT/build/soh-settings-update"
+```
+
+This omits `soh.o2r` and `oot.o2r`; the result needs the existing SoH 9.2.3 assets.
+It is an update folder, not a complete fresh installation. Keep the matched GL/SDL
+profile environment variables from your build. Back up the current executable,
+close the title, and replace `eboot.bin` plus the matching `sce_module` files while preserving
+assets, UserData and saves. Back up both the old executable and runtime modules.
+The complete-install checker still requires both game archives.

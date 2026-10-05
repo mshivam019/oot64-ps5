@@ -8,6 +8,7 @@
 #   tools/check-build.sh                      # newest build under $PS5SDK_ROOT/build
 #   tools/check-build.sh --dir /path/PPSA99620
 #   tools/check-build.sh --variant camera-controls --dir /path/to/PPSA99620
+#   tools/check-build.sh --update --dir /path/PPSA99620  # executable/runtime update
 #   tools/check-build.sh --json               # machine-readable summary
 #   tools/check-build.sh --self-test          # check the checker on synthetic folders
 set -uo pipefail
@@ -24,11 +25,13 @@ CONTENT_ID=UP9000-PPSA99620_00-SHIPOFHARKINIAN0
 DIR=
 JSON=0
 VARIANT=
+UPDATE=0
 while [ $# -gt 0 ]; do
     case $1 in
         --dir) DIR=${2:?--dir needs a path}; shift 2 ;;
         --dir=*) DIR=${1#*=}; shift ;;
         --json) JSON=1; shift ;;
+        --update) UPDATE=1; shift ;;
         --variant) VARIANT=${2:?--variant needs stock or camera-controls}; shift 2 ;;
         --self-test) SELF_TEST=1; shift ;;
         -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
@@ -121,6 +124,26 @@ PYFIXTURE
     echo '{"controls_variant":"camera-controls"}' >"$c/build-profile.json"
     expect 1 "camera profile requires executable hash" "$c"
     expect 1 "nonexistent directory" "$work/missing"
+
+    c=$(case_dir); mkdir -p "$c/assets/mods"
+    cp "$c/assets/soh.o2r" "$c/assets/mods/HD.o2r"
+    expect 1 "mod archive requires manifest" "$c"
+    echo HD.o2r >"$c/assets/mods/mods.txt"; expect 0 "indexed HD archive passes" "$c"
+    echo Missing.o2r >"$c/assets/mods/mods.txt"; expect 1 "missing indexed HD archive rejected" "$c"
+    echo ../soh.o2r >"$c/assets/mods/mods.txt"; expect 1 "manifest traversal rejected" "$c"
+
+    c=$(case_dir); rm -r "$c/assets" "$c/sce_sys"
+    python3 - "$c" <<'PYUPDATE'
+import hashlib, json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+(p / "build-profile.json").write_text(json.dumps({"controls_variant": "stock",
+    "game_assets_included": False,
+    "executable_sha256": hashlib.sha256((p / "eboot.bin").read_bytes()).hexdigest()}))
+PYUPDATE
+    expect 0 "explicit executable update passes" "$c" --update
+    expect 1 "update cannot pass as a complete installation" "$c"
+    printf X >>"$c/eboot.bin"; expect 1 "tampered update rejected" "$c" --update
+    c=$(case_dir); expect 1 "legacy folder cannot bypass checks using update mode" "$c" --update
 
     echo
     if [ "$failed" = 0 ]; then
@@ -257,6 +280,7 @@ PY
 
 check_file eboot.bin 1000000 4f153d1d "eboot.bin"
 check_file sce_module/libc.prx 100000 5414f5ee "sce_module/libc.prx"
+if [ "$UPDATE" = 0 ]; then
 check_file assets/oot.o2r 1000000 504b0304 "assets/oot.o2r (release packages ship without it)"
 check_file assets/soh.o2r 100000 504b0304 "assets/soh.o2r"
 check_file assets/gamecontrollerdb.txt 1024 "" "assets/gamecontrollerdb.txt"
@@ -264,29 +288,44 @@ check_file sce_sys/param.json 100 "" "sce_sys/param.json"
 check_file sce_sys/icon0.png 1024 89504e470d0a1a0a "sce_sys/icon0.png"
 check_file sce_sys/pic0.dds 1024 44445320 "sce_sys/pic0.dds"
 check_file sce_sys/pic1.dds 1024 44445320 "sce_sys/pic1.dds"
-check_absent sce_sys/snd0.at9
-check_absent perf.txt
 check_zip assets/oot.o2r
 check_zip assets/soh.o2r
 check_param
 
-profile_result=$(python3 - "$DIR" "$VARIANT" <<'PYPROFILE'
+else
+    WARN+=("executable update only; existing game assets and title metadata must be preserved")
+fi
+
+check_absent sce_sys/snd0.at9
+check_absent perf.txt
+
+mods_result=$(python3 "$REPO/tools/check-mods.py" "$DIR" 2>&1)
+if [ $? -eq 0 ]; then
+    OK+=("$mods_result")
+else
+    FAIL+=("mod manifest validation: $mods_result")
+fi
+
+profile_result=$(python3 - "$DIR" "$VARIANT" "$UPDATE" <<'PYPROFILE'
 import hashlib, json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 expected = sys.argv[2]
+update = sys.argv[3] == "1"
 try:
     path = root / "build-profile.json"
     profile = json.loads(path.read_text()) if path.exists() else {}
     if not isinstance(profile, dict):
         raise ValueError("build-profile.json must be an object")
+    if update and profile.get("game_assets_included") is not False:
+        raise ValueError("update requires game_assets_included=false in build-profile.json")
     variant = profile.get("controls_variant", "stock")
     if variant not in ("stock", "camera-controls"):
         raise ValueError(f"unknown controls variant: {variant!r}")
     if expected and variant != expected:
         raise ValueError(f"controls variant is {variant}, expected {expected}")
     digest = profile.get("executable_sha256")
-    if variant == "camera-controls" and not digest:
-        raise ValueError("camera-controls profile is missing executable_sha256")
+    if (update or variant == "camera-controls") and not digest:
+        raise ValueError("profile is missing executable_sha256")
     if digest and digest != hashlib.sha256((root / "eboot.bin").read_bytes()).hexdigest():
         raise ValueError("build-profile.json executable SHA-256 does not match eboot.bin")
     print(f"controls variant: {variant}" + ("; executable SHA-256 verified" if digest else " (legacy profile)"))
@@ -324,8 +363,8 @@ else
 fi
 
 if [ ${#FAIL[@]} -eq 0 ]; then
-    echo "PASS: ${#OK[@]} checks passed, ${#WARN[@]} warning(s)"
+    if [ "$JSON" = 0 ]; then echo "PASS: ${#OK[@]} checks passed, ${#WARN[@]} warning(s)"; fi
     exit 0
 fi
-echo "FAIL: ${#FAIL[@]} problem(s) found in $DIR"
+if [ "$JSON" = 0 ]; then echo "FAIL: ${#FAIL[@]} problem(s) found in $DIR"; fi
 exit 1

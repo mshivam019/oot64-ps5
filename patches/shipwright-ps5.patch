@@ -147,7 +147,7 @@ index 12354dce4..027d0bfe8 100644
      auto initData = std::make_shared<Ship::ResourceInitData>();
      initData->Format = RESOURCE_FORMAT_BINARY;
 diff --git a/soh/soh/Enhancements/mod_menu.cpp b/soh/soh/Enhancements/mod_menu.cpp
-index ff9a459ba..ba04dbc59 100644
+index ff9a459..77a2189 100644
 --- a/soh/soh/Enhancements/mod_menu.cpp
 +++ b/soh/soh/Enhancements/mod_menu.cpp
 @@ -1,5 +1,8 @@
@@ -252,8 +252,20 @@ index ff9a459ba..ba04dbc59 100644
  }
  
  extern "C" void gfx_texture_cache_clear();
+@@ -374,7 +435,11 @@ void ModMenuWindow::InitElement() {
+ }
+ 
+ void RegisterModMenuWidgets() {
++#ifdef __PROSPERO__
++    enableModsWidget = { .name = "Enable HD textures / mods", .type = WidgetType::WIDGET_CVAR_CHECKBOX };
++#else
+     enableModsWidget = { .name = "Enable Mods", .type = WidgetType::WIDGET_CVAR_CHECKBOX };
++#endif
+     enableModsWidget.CVar(CVAR_SETTING("AltAssets"))
+         .RaceDisable(false)
+         .Options(UIWidgets::CheckboxOptions({ { .disabledTooltip = "Temporarily disabled while editing mods list." } })
 diff --git a/soh/soh/OTRGlobals.cpp b/soh/soh/OTRGlobals.cpp
-index 39f04ddbb..7425f8c76 100644
+index 39f04dd..e190bee 100644
 --- a/soh/soh/OTRGlobals.cpp
 +++ b/soh/soh/OTRGlobals.cpp
 @@ -7,6 +7,9 @@
@@ -266,7 +278,23 @@ index 39f04ddbb..7425f8c76 100644
  
  #include "ResourceManagerHelpers.h"
  #include <fast/Fast3dWindow.h>
-@@ -430,7 +433,12 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
+@@ -278,6 +281,15 @@ OTRGlobals::OTRGlobals() {
+ 
+     context->InitConfiguration();
+     context->InitConsoleVariables();
++#ifdef __PROSPERO__
++    // PS5 has one interpolation mode; saved desktop/older settings cannot lower it.
++    CVarSetInteger(CVAR_SETTING("InterpolationFPS"), 60);
++    CVarSetInteger(CVAR_SETTING("MatchRefreshRate"), 0);
++    // Let controller users reach the port menu without first needing a keyboard.
++    if (context->GetConsoleVariables()->Get(CVAR_IMGUI_CONTROLLER_NAV) == nullptr) {
++        CVarSetInteger(CVAR_IMGUI_CONTROLLER_NAV, 1);
++    }
++#endif
+ 
+     auto controlDeck = std::make_shared<LUS::ControlDeck>(std::vector<CONTROLLERBUTTONS_T>({
+         BTN_CUSTOM_MODIFIER1,
+@@ -430,7 +442,12 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
      OSFatal();
  #endif
  
@@ -279,7 +307,7 @@ index 39f04ddbb..7425f8c76 100644
          SohGui::RegisterPopup("Extractor assets not found",
                                "No O2R files found. Missing 'assets/' folder needed to generate OTR file.\nPlease "
                                "re-extract them from the download or.\n\nExiting...",
-@@ -459,7 +467,7 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
+@@ -459,7 +476,7 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
                  if (sohArchiveVersionMatch) {
  #ifdef _WIN32
                      extractStep = ES_WINDOWS;
@@ -288,7 +316,25 @@ index 39f04ddbb..7425f8c76 100644
                      extractStep = ES_VERIFY;
  #else
                      extractStep = args.empty() ? ES_EXTRACT : ES_EXTRACT_ARGS;
-@@ -1701,7 +1709,7 @@ extern "C" void Graph_StartFrame() {
+@@ -988,6 +1005,9 @@ bool OTRGlobals::HasOriginal() {
+ }
+ 
+ uint32_t OTRGlobals::GetInterpolationFPS() {
++#ifdef __PROSPERO__
++    return 60;
++#else
+     if (CVarGetInteger(CVAR_SETTING("MatchRefreshRate"), 0)) {
+         return Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate();
+     } else if (CVarGetInteger(CVAR_VSYNC_ENABLED, 1) ||
+@@ -996,6 +1016,7 @@ uint32_t OTRGlobals::GetInterpolationFPS() {
+                                   CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20));
+     }
+     return CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
++#endif
+ }
+ 
+ extern "C" void OTRMessage_Init();
+@@ -1701,7 +1722,7 @@ extern "C" void Graph_StartFrame() {
  #endif
  }
  
@@ -297,7 +343,7 @@ index 39f04ddbb..7425f8c76 100644
      auto wnd = std::dynamic_pointer_cast<Fast::Fast3dWindow>(OTRGlobals::Instance->context->GetWindow());
  
      if (wnd == nullptr) {
-@@ -1717,7 +1725,33 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
+@@ -1717,7 +1738,33 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
      UIWidgets::Colors themeColor =
          static_cast<UIWidgets::Colors>(CVarGetInteger(CVAR_SETTING("Menu.Theme"), UIWidgets::Colors::LightBlue));
      ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(themeColor));
@@ -332,7 +378,7 @@ index 39f04ddbb..7425f8c76 100644
          wnd->DrawAndRunGraphicsCommands(Commands, m);
          intp->mInterpolationIndex++;
      }
-@@ -1732,7 +1766,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+@@ -1732,7 +1779,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
      }
  
      audio.cv_to_thread.notify_one();
@@ -341,7 +387,7 @@ index 39f04ddbb..7425f8c76 100644
      int target_fps = OTRGlobals::Instance->GetInterpolationFPS();
      static int last_fps;
      static int last_update_rate;
-@@ -1754,11 +1788,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+@@ -1754,11 +1801,7 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
  
      while (time + original_fps <= next_original_frame) {
          time += original_fps;
@@ -354,7 +400,7 @@ index 39f04ddbb..7425f8c76 100644
      }
  
      time -= fps;
-@@ -1769,11 +1799,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
+@@ -1769,11 +1812,11 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
  
      // When the gfx debugger is active, only run with the final mtx
      if (GfxDebuggerIsDebugging()) {
@@ -440,3 +486,36 @@ new file mode 100644
 +    int mUpdateRate = 0;
 +    int mTargetFps = 0;
 +};
+diff --git a/soh/soh/SohGui/SohMenuSettings.cpp b/soh/soh/SohGui/SohMenuSettings.cpp
+index b806da5..0f491bf 100644
+--- a/soh/soh/SohGui/SohMenuSettings.cpp
++++ b/soh/soh/SohGui/SohMenuSettings.cpp
+@@ -128,6 +128,10 @@ void SohMenu::AddMenuSettings() {
+     AddSidebarEntry("Settings", "General", 2);
+     WidgetPath path = { "Settings", "General", SECTION_COLUMN_1 };
+ 
++#ifdef __PROSPERO__
++    AddWidget(path, "Config folder: " + Ship::Context::GetAppDirectoryPath(), WIDGET_SEPARATOR_TEXT);
++#endif
++
+     // General - Settings
+     AddWidget(path, "Menu Settings", WIDGET_SEPARATOR_TEXT);
+     AddWidget(path, "Menu Theme", WIDGET_CVAR_COMBOBOX)
+@@ -372,6 +376,9 @@ void SohMenu::AddMenuSettings() {
+                 .Max(8)
+                 .DefaultValue(1));
+ #endif
++#ifdef __PROSPERO__
++    AddWidget(path, "Target frame rate: 60 FPS", WIDGET_SEPARATOR_TEXT);
++#else
+     auto fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), 20);
+     const char* fpsFormat = fps == 20 ? "Original (%d)" : "%d";
+     AddWidget(path, "Current FPS", WIDGET_CVAR_SLIDER_INT)
+@@ -395,6 +402,7 @@ void SohMenu::AddMenuSettings() {
+         .CVar(CVAR_SETTING("MatchRefreshRate"))
+         .RaceDisable(false)
+         .Options(CheckboxOptions().Tooltip("Matches interpolation value to the refresh rate of your display."));
++#endif
+     AddWidget(path, "Renderer API (Needs reload)", WIDGET_VIDEO_BACKEND).RaceDisable(false);
+     AddWidget(path, "Enable Vsync", WIDGET_CVAR_CHECKBOX)
+         .CVar(CVAR_VSYNC_ENABLED)

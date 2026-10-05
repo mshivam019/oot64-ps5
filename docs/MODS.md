@@ -7,8 +7,10 @@ filename stem, including archives in subdirectories.
 
 ## OoT Reloaded
 
-1. Download the **SoH O2R HD** release from
-   [OoT Reloaded](https://github.com/GhostlyDark/OoT-Reloaded/releases/tag/v11.0.0).
+1. Download **`oot-reloaded-v11.0.0-soh-o2r-hd.7z`** from
+   [OoT Reloaded](https://github.com/GhostlyDark/OoT-Reloaded/releases/tag/v11.0.0)
+   ([direct HD O2R download](https://github.com/GhostlyDark/OoT-Reloaded/releases/download/v11.0.0/oot-reloaded-v11.0.0-soh-o2r-hd.7z)).
+   Choose **SoH O2R HD**, not the PNG pack, emulator packs or multipart 4K download.
 2. Extract `OoT_Reloaded_v11.0.0_HD.o2r` into your title's `assets/mods/` folder.
    The 626 MB download expands to about 3.8 GiB; leave enough space on the console.
 3. Generate the index on your PC:
@@ -19,8 +21,41 @@ filename stem, including archives in subdirectories.
 
 4. Upload the archives and `mods.txt` to
    `/mnt/ext1/etaHEN/games/PPSA99620/assets/mods/` and restart the title.
-5. Enable **Use Alternate Assets** in SoH. Its config setting is
+5. Enable **Settings → Mod Menu → Enable Mods** (called **Enable HD textures / mods**
+in the updated PS5 source) in SoH. Its config setting is
    `CVars.gSettings.AltAssets = 1`.
+
+### FileZilla setup without the index helper
+
+Close the game. In FileZilla open your title's `assets/mods/` folder (create it if
+needed). Upload the extracted `.o2r` file there, then upload a plain UTF-8 text file
+named exactly `mods.txt` containing:
+
+```text
+OoT_Reloaded_v11.0.0_HD.o2r
+```
+
+The filename must match the uploaded archive, including capitalization. Do not
+upload the compressed download or name the manifest `mods.txt.txt`. The resulting
+layout is:
+
+```text
+PPSA99620/assets/mods/
+  OoT_Reloaded_v11.0.0_HD.o2r
+  mods.txt
+```
+
+Restart SoH, open its port menu and enable **Settings → Mod Menu → Enable Mods** (called **Enable HD textures / mods**
+in the updated PS5 source) in the mods
+menu. For config editing, set `CVars.gSettings.AltAssets` to numeric `1` in the
+active JSON as described in [SETTINGS.md](SETTINGS.md). This is separate from
+Options → the game's pause/save menu.
+
+If textures stay original, check the manifest and exact filenames first, then
+alternate assets and the active config path. Also check for a stale
+`UserData/mods/mods.txt`: that manifest overrides `assets/mods/mods.txt`, and its
+entries resolve relative to `UserData/mods`, not `assets/mods`. Back up the stale
+manifest and remove it if you intend to use the bundled `assets/mods` location.
 
 A `mods/mods.txt` in the writable data directory takes precedence over the bundled
 manifest. SoH preserves mod priority in `CVars.gSettings.EnabledMods` (filename

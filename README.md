@@ -25,6 +25,10 @@ It contains **no game data**. You need your own legally dumped Ocarina of Time R
 - `p120` builds request 120 Hz only when the display reports support and otherwise keep
   60 Hz. 120 Hz output itself and full-game performance coverage remain unverified.
 
+Game assets used for recorded tests: **Ocarina of Time US/NTSC v1.2** → `oot.o2r`
+(SoH 9.2.3). See [tested ROM details](docs/CONSOLE-SETUP.md#tested-game-assets)
+for hashes and the language testing limits.
+
 Tested on firmware 9.00 with standalone **kstuff + ShadowMountPlus** launched by
 Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-SETUP.md).
 
@@ -82,7 +86,10 @@ The archive's `INSTALL.txt` repeats these steps for its platform.
 Building from source instead is covered in [docs/BUILDING.md](docs/BUILDING.md);
 [docs/RELEASING.md](docs/RELEASING.md) packages a build for other people.
 
-With the patched driver, set **Interpolation FPS** to **60** in SoH's settings.
+The updated PS5 source uses a fixed **60 FPS interpolation** target. Existing release
+downloads still need **Interpolation FPS = 60** and **Match Refresh Rate off**.
+See [Settings and language](docs/SETTINGS.md) for the separate port menu, active
+config path and supported language requirements.
 For HD textures and controller glyphs, follow [HD textures and PlayStation prompts](docs/MODS.md).
 
 **120 Hz:** the release is the `2160p120` build. It asks for 120 Hz output when the
@@ -90,6 +97,56 @@ display reports support and otherwise stays at 60 Hz, so it is safe on 60 Hz TVs
 120 Hz output on a supporting display is untested, and 120 unique frames per second
 would need frames below 8.33 ms; 4K with HD textures runs at about 58 FPS. Keep
 Interpolation FPS at 60. See [Console setup](docs/CONSOLE-SETUP.md#display-and-frame-rate).
+
+## Settings and language changes
+
+The updated source adds **touchpad click** to open/close SoH's port settings menu.
+Use the D-pad to navigate, Cross to select and Circle to go back. **Options** still
+opens Zelda's pause/save screen. Settings → General also shows the active config
+folder. These changes have compiled and passed executable integrity checks;
+console testing is pending, and existing v1.0.0/v1.1.0 release downloads do not
+include the new shortcut.
+
+To change game text, open **Settings → General → Language**:
+
+- **English:** select English (`Languages = 0`). The recorded gameplay tests used
+  **Ocarina of Time US/NTSC v1.2**, extracted with SoH 9.2.3.
+- **German:** extract `oot.o2r` from your own supported European/PAL ROM using
+  official SoH 9.2.3. Confirm German is available on PC, back up the PS5's old
+  archive, close the title and replace `assets/oot.o2r`. Then select German
+  (`Languages = 1`). German gameplay on this PS5 build remains unverified.
+- **Spanish:** this version has no native Spanish language slot; a compatible
+  translation mod would be needed.
+
+The menu lists languages present in your assets. Changing the JSON cannot add
+missing translations, and this setting changes game text rather than translating
+all port-menu labels.
+
+For existing downloads or manual configuration, close the game and edit its
+**active** `shipofharkinian.json`. For writable folder titles it normally lives in
+`PPSA99620/UserData/`; the fallback is the title's `/download0` sandbox. A file
+beside `eboot.bin` is ignored. The correct nested setting is
+**`CVars.gSettings.Languages`**, plural, with a numeric value. Preserve the rest
+of the config and upload it to the same location.
+
+See [Settings and config helper](docs/SETTINGS.md) for the full JSON example,
+backup helper and sandbox details. The updated source fixes interpolation at
+**60 FPS** and removes the adjustable FPS/refresh-match controls; actual frame
+rate still depends on rendering load.
+
+## HD texture setup
+
+1. Download the **SoH O2R HD** pack described in [the HD texture guide](docs/MODS.md),
+   and extract its `.o2r` archive.
+2. Upload the archive to `PPSA99620/assets/mods/` together with **`mods.txt`** listing
+   its exact filename. The guide includes a manual FileZilla example and an index
+   helper. Copying only the compressed download or archive is insufficient.
+3. Restart the title, then enable **Settings → Mod Menu → Enable Mods**, called
+   **Enable HD textures / mods** in the updated source.
+
+[The guide](docs/MODS.md) also covers stale manifests, mod priority and optional
+PlayStation prompts. Preserve your game archives, configuration and saves when
+updating.
 
 ## Layout
 
