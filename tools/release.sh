@@ -165,10 +165,13 @@ if [ "$WITH_ASSETS" = 0 ]; then
 fi
 cp "$REPO/tools/install.ps1" "$REPO/tools/install.sh" \
     "$REPO/tools/make-assets.ps1" "$REPO/tools/make-assets.sh" \
-    "$REPO/tools/index-mods.py" "$REPO/tools/configure-settings.py" "$build/tools/"
+    "$REPO/tools/index-mods.py" "$REPO/tools/configure-settings.py" \
+    "$REPO/tools/check-build.sh" "$REPO/tools/check-mods.py" "$REPO/tools/env.sh" "$build/tools/"
 if [ -f "$REPO/docs/CONSOLE-SETUP.md" ]; then cp "$REPO/docs/CONSOLE-SETUP.md" "$build/"; fi
 
 cp "$REPO/docs/SETTINGS.md" "$REPO/docs/MODS.md" "$build/"
+cp "$REPO/README.md" "$REPO/LICENSE" "$REPO/THIRD-PARTY-NOTICES.md" "$REPO/sources.lock.json" "$build/"
+cp -a "$REPO/docs" "$build/docs"
 
 write_install() {
     local file=$1 platform=$2

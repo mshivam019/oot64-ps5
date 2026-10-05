@@ -44,7 +44,7 @@ Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-S
 
 From a [release](https://github.com/mshivam019/oot64-ps5/releases), with no compiling:
 
-New source builds enable **right-stick camera controls and HD textures / mods by default**, with independent switches in Settings → Mod Menu. Saved off settings are preserved. HD archives must be installed separately. See [SETTINGS.md](docs/SETTINGS.md).
+[Release v1.2.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.2.0) and new source builds enable **right-stick camera controls and HD textures / mods by default**, with independent switches in Settings → Mod Menu. Saved off settings are preserved. HD archives must be installed separately. See [SETTINGS.md](docs/SETTINGS.md).
 
 Existing [stock v1.0.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.0.0) and [camera-controls v1.1.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.1.0) downloads predate these runtime toggles.
 
