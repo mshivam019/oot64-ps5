@@ -100,6 +100,8 @@ Interpolation FPS at 60. See [Console setup](docs/CONSOLE-SETUP.md#display-and-f
 
 ## Settings and language changes
 
+New source builds scale the port menu for TV resolution and default to Large; adjust **Settings → General → Menu Size**.
+
 The updated source adds **touchpad click** to open/close SoH's port settings menu.
 Use the D-pad to navigate, Cross to select and Circle to go back. **Options** still
 opens Zelda's pause/save screen. Settings → General also shows the active config

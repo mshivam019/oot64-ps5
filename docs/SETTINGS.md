@@ -115,3 +115,11 @@ Follow [MODS.md](MODS.md). The PS5 requires **both the extracted texture archive
 and a `mods.txt` manifest**, then **Settings → Mod Menu → Enable Mods** (called **Enable HD textures / mods**
 in the updated PS5 source) enabled. Merely copying
 a ZIP, 7z or texture folder is insufficient.
+
+## Menu size on a TV
+
+PS5 source builds scale the port UI with output resolution (twice the native UI size at 4K), with Large as the default. Settings → General → Menu Size lets you choose Small, Normal, Large or X-Large. Existing size preferences remain saved. This changes the port menu, not game HUD or texture resolution.
+
+To change a downloaded config before uploading it, add `--menu-size large` (or `x-large`) to `tools/configure-settings.py`. Close the title first.
+
+Controller menu navigation: **L1/R1** change the top-level tab; **L2/R2** change its sidebar section. Use D-pad/left stick to focus controls, Cross to activate, and Circle to cancel a selector or popup. Custom tabs/sections show a focus outline. Shoulder shortcuts pause while a control is being edited or a popup is open. Touchpad closes the menu.

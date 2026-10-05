@@ -12,6 +12,7 @@ def main():
     parser.add_argument("config", type=Path, help="existing shipofharkinian.json from the active UserData/sandbox")
     parser.add_argument("--language", choices=("english", "german"))
     parser.add_argument("--hd-textures", choices=("on", "off"))
+    parser.add_argument("--menu-size", choices=("small", "normal", "large", "x-large"))
     args = parser.parse_args()
     try:
         data = json.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -28,6 +29,8 @@ def main():
             settings["Languages"] = {"english": 0, "german": 1}[args.language]
         if args.hd_textures:
             settings["AltAssets"] = int(args.hd_textures == "on")
+        if args.menu_size:
+            settings["ImGuiScale"] = {"small": 0, "normal": 1, "large": 2, "x-large": 3}[args.menu_size]
         output = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
         backup = args.config.with_name(args.config.name + f".backup-{time.time_ns()}")
         shutil.copy2(args.config, backup)
