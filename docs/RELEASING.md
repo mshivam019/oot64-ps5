@@ -62,7 +62,7 @@ Useful flags:
 | --- | --- |
 | `--profile 2160p120` | matched GL/SDL build via `build-profile.sh` (also 1080p60, 1440p60, 2160p60, …) |
 | `--from-dir DIR` | package an existing `PPSA99620` folder, skip the build |
-| `--variant camera-controls` | package the optional right-stick camera build; defaults to stock |
+| `--variant camera-controls` | default feature profile; camera can be disabled in the Mod Menu |
 | `--with-assets` | include the ROM-derived `oot.o2r` (private use only; never distribute) |
 | `--platform windows` | build only one archive (`windows` or `linux`; default both) |
 | `--no-package` | stop after verification, leave the title folder in place |
@@ -154,10 +154,7 @@ sense on a self-hosted runner.
 
 ## Camera controls variant
 
-Use a separate source/build directory for the optional camera patch, with
-`SOH_CAMERA_CONTROLS=1`. Package that build with `--variant camera-controls`.
-The title ID and installation steps stay the same as stock; install one variant
-at a time. The original v1.0.0 stock downloads remain available.
+Camera support is included in the main PS5 patch and every normal build. Package with the default `--variant camera-controls`; users can turn it off in the Mod Menu. HD textures / mods also default to enabled, while existing saved off preferences persist. `--variant stock` only describes legacy executables packaged from an existing folder; it does not select a new stock source build.
 
 `PS5_COMPILER_RT` can select an existing `libclang_rt.builtins-x86_64.a` when
 clang 18 is installed outside the normal executable path.

@@ -3,7 +3,6 @@
 # Output: $PS5SDK_ROOT/build/soh-pkg/dist/PPSA99620
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
-bash "$REPO/tools/apply-camera-controls.sh"
 
 cmake -S "$SOH_SOURCE" -B "$SOH_BUILD" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_REMOTE_CONTROL=0

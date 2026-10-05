@@ -27,7 +27,7 @@ WITH_ASSETS=0
 SKIP_BOOTSTRAP=0
 PACKAGE=1
 PLATFORM=all
-VARIANT=stock
+VARIANT=camera-controls
 OUTDIR=$REPO/dist
 
 while [ $# -gt 0 ]; do
@@ -51,8 +51,6 @@ while [ $# -gt 0 ]; do
 done
 
 case "$VARIANT" in stock|camera-controls) ;; *) echo "Invalid variant: $VARIANT" >&2; exit 2 ;; esac
-
-if [ "$VARIANT" = camera-controls ]; then export SOH_CAMERA_CONTROLS=1; else export SOH_CAMERA_CONTROLS=0; fi
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -180,8 +178,8 @@ write_install() {
         echo "version: $version"
         echo "controls: $VARIANT"
         if [ "$VARIANT" = camera-controls ]; then
-            echo "Right stick: camera. D-pad: C buttons. X/O keep their normal bindings."
-            echo "Uses the stock title ID; install one variant at a time."
+            echo "Camera controls and HD textures / mods default to on; change either in Settings > Mod Menu."
+            echo "Right stick moves camera; D-pad uses C buttons. Saved off settings are preserved."
         fi
         echo
         echo "Contents"

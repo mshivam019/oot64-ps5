@@ -3,11 +3,10 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 if [[ "${1:-}" == "--camera-controls" ]]; then
-    export SOH_CAMERA_CONTROLS=1
     shift
 fi
 if (( $# )); then
-    echo "Usage: $0 [--camera-controls] (or SOH_CAMERA_CONTROLS=1)" >&2
+    echo "Usage: $0 [--camera-controls]" >&2
     exit 1
 fi
 
@@ -19,9 +18,10 @@ git -c advice.detachedHead=false checkout -q "$(lock "['shipwright']['revision']
 git submodule update --init --recursive -q
 git -C libultraship -c advice.detachedHead=false checkout -q "$(lock "['libultraship']['revision']")"
 
-git apply --check "$REPO/patches/shipwright-ps5.patch"
-git apply "$REPO/patches/shipwright-ps5.patch"
-git -C libultraship apply --check "$REPO/patches/libultraship-ps5.patch"
-git -C libultraship apply "$REPO/patches/libultraship-ps5.patch"
-bash "$REPO/tools/apply-camera-controls.sh"
+apply_patch() {
+    if git -C "$1" apply --check "$2" 2>/dev/null; then git -C "$1" apply "$2";
+    else git -C "$1" apply --reverse --check "$2"; fi
+}
+apply_patch "$SOH_SOURCE" "$REPO/patches/shipwright-ps5.patch"
+apply_patch "$SOH_SOURCE/libultraship" "$REPO/patches/libultraship-ps5.patch"
 echo "Ship of Harkinian ready at $SOH_SOURCE"

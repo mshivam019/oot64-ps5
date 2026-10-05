@@ -44,10 +44,9 @@ Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-S
 
 From a [release](https://github.com/mshivam019/oot64-ps5/releases), with no compiling:
 
-Choose **stock** for the original controls, or **[camera-controls](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.1.0)** for a right-stick
-camera and D-pad C buttons. Both use the same installation steps and title ID;
-install one variant at a time. Switching back preserves settings; disable Free Look
-and reset/remap the controller if you want the original layout again. The [stock v1.0.0 downloads](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.0.0) remain available.
+New source builds enable **right-stick camera controls and HD textures / mods by default**, with independent switches in Settings → Mod Menu. Saved off settings are preserved. HD archives must be installed separately. See [SETTINGS.md](docs/SETTINGS.md).
+
+Existing [stock v1.0.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.0.0) and [camera-controls v1.1.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.1.0) downloads predate these runtime toggles.
 
 1. Download the archive for your PC (`-windows.zip`, or `-linux.zip` on Linux and
    macOS), extract it and open a terminal in the extracted folder.
