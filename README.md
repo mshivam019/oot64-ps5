@@ -104,9 +104,10 @@ New source builds scale the port menu for TV resolution and default to Large; ad
 The updated source adds **touchpad click** to open/close SoH's port settings menu.
 Use the D-pad to navigate, Cross to select and Circle to go back. **Options** still
 opens Zelda's pause/save screen. Settings → General also shows the active config
-folder. These changes have compiled and passed executable integrity checks;
-console testing is pending, and existing v1.0.0/v1.1.0 release downloads do not
-include the new shortcut.
+folder. The rebuilt SoH menu was checked on PS5: the user confirmed theme selection,
+Mod Menu toggle access, Circle back and Triangle action-row access work. Builds
+and executable checks passed; camera-toggle gameplay still needs confirmation.
+Existing v1.0.0/v1.1.0 release downloads do not include the new shortcut.
 
 To change game text, open **Settings → General → Language**:
 
