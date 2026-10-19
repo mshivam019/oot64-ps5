@@ -169,7 +169,7 @@ cp "$REPO/tools/install.ps1" "$REPO/tools/install.sh" \
     "$REPO/tools/check-build.sh" "$REPO/tools/check-mods.py" "$REPO/tools/env.sh" "$build/tools/"
 if [ -f "$REPO/docs/CONSOLE-SETUP.md" ]; then cp "$REPO/docs/CONSOLE-SETUP.md" "$build/"; fi
 
-for helper in install.py ps5_install_lib.py prepare-files.py transfer-files.py Prepare-Files-Windows.cmd prepare-files.sh INSTALL-HELPER-LICENSE; do
+for helper in install.py ps5_install_lib.py prepare-files.py transfer-files.py Prepare-Files-Windows.cmd prepare-files.sh validate-files.py Validate-Files-Windows.cmd validate-files.sh INSTALL-HELPER-LICENSE; do
     cp "$REPO/tools/$helper" "$build/tools/"
 done
 cp "$REPO/INSTALL.md" "$build/INSTALL.md"

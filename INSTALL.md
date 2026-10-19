@@ -56,7 +56,7 @@ prepared USB folder does not install itself just by plugging the drive in.
 
 ## Optional common file helper
 
-[Download PS5-Install-Helper-v1.0.0.zip](https://github.com/mshivam019/oot64-ps5/releases/download/v1.2.0/PS5-Install-Helper-v1.0.0.zip).
+[Download PS5-Install-Helper-v1.1.0.zip](https://github.com/mshivam019/oot64-ps5/releases/download/v1.2.0/PS5-Install-Helper-v1.1.0.zip).
 It runs on a computer with **Python 3.9+**, uses only the standard library, and
 needs no PS5 SDK, PS5 Upload or extra Python packages. The game-specific converter
 requirements above still apply. Manual copying does not require this helper.
@@ -84,6 +84,43 @@ python3 prepare-files.py --title PPSA99620 --game "/path/to/oot.o2r" --output "/
 
 Add `--app "/path/to/PPSA99620.zip"` for a complete app-plus-game staging folder.
 Add `--check` to validate inputs and see the plan before copying.
+
+### Check the finished folder before copying
+
+Preparation now writes **MANIFEST-PPSA99620.json** beside the `PPSA99620/`
+folder. Keep it: it records each selected file's size and SHA-256 from the original
+preparation. The manifest and copy instructions stay outside the title folder;
+copy only the app/game folder to the PS5.
+
+Double-click **Validate-Files-Windows.cmd**, or run `sh validate-files.sh`, and
+choose your prepared folder. The validator works offline and only reads files.
+For a complete app-plus-game folder:
+
+```sh
+python3 validate-files.py --src "/path/to/ready/PPSA99620" --require-complete
+```
+
+For a game-data overlay for an app already installed from the store, omit
+`--require-complete`. An app-only folder is explicitly reported as needing game
+data; a data-only overlay is explicitly reported as needing the separately
+installed app. Missing files, changed bytes or invalid layout cause a nonzero
+exit status. Additional files are reported as outside the checksum inventory,
+so saves/mods added later are not silently described as verified.
+
+To recheck a copy on USB, point `--src` at that copied title folder and keep the
+manifest beside it, or pass `--manifest "/path/to/MANIFEST-PPSA99620.json"`.
+Optional `--report "/path/to/new-report.json"` saves the results outside the
+title folder. Reports list paths/check results, never file contents; review them
+for personal filenames before sharing. Existing reports are not overwritten.
+
+The manifest verifies **copy integrity since preparation**, plus expected file
+layout and title metadata. It does not prove dump authenticity, supported game
+content, generated-module compatibility, console registration or gameplay.
+Ocarina/Majora archives also receive a ZIP CRC check; disc images receive header,
+revision and file-table bounds checks, not a complete disc integrity test.
+For folders made with older helpers or by hand, prepare a new folder from your
+original app/game inputs with v1.1.0+ to obtain a manifest. Do not generate a new
+baseline from files you suspect are already damaged.
 
 Only after preparation finishes, optional FTP transfer is a separate command:
 
