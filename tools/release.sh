@@ -169,6 +169,10 @@ cp "$REPO/tools/install.ps1" "$REPO/tools/install.sh" \
     "$REPO/tools/check-build.sh" "$REPO/tools/check-mods.py" "$REPO/tools/env.sh" "$build/tools/"
 if [ -f "$REPO/docs/CONSOLE-SETUP.md" ]; then cp "$REPO/docs/CONSOLE-SETUP.md" "$build/"; fi
 
+for helper in install.py ps5_install_lib.py prepare-files.py transfer-files.py Prepare-Files-Windows.cmd prepare-files.sh INSTALL-HELPER-LICENSE; do
+    cp "$REPO/tools/$helper" "$build/tools/"
+done
+cp "$REPO/INSTALL.md" "$build/INSTALL.md"
 cp "$REPO/docs/SETTINGS.md" "$REPO/docs/MODS.md" "$build/"
 cp "$REPO/README.md" "$REPO/LICENSE" "$REPO/THIRD-PARTY-NOTICES.md" "$REPO/sources.lock.json" "$build/"
 cp -a "$REPO/docs" "$build/docs"
@@ -190,10 +194,12 @@ write_install() {
         echo "  tools/               asset helper (and install helper on Windows)"
         echo "  CONSOLE-SETUP.md     console requirements and tested payloads"
         echo
+        echo "Start with INSTALL.md: storage choice, USB/offline copying, Wi-Fi FTP and separate preparation/transfer."
+        echo "M.2, Ethernet and PS5 Upload are optional."
         echo "What you need (no compiling)"
         echo "  - your own legally dumped Ocarina of Time ROM"
         echo "  - the official Ship of Harkinian 9.2.3 build for this platform (to create oot.o2r)"
-        echo "  - a console with FTP (etaHEN) and folder-title support (kstuff + ShadowMountPlus);"
+        echo "  - a homebrew-capable console with native folder-title support and a file-copy method;"
         echo "    see CONSOLE-SETUP.md"
         echo
         if [ "$WITH_ASSETS" = 0 ]; then
@@ -212,11 +218,11 @@ write_install() {
         echo
         echo "2. Copy output/$TITLE_ID to the console and register it"
         if [ "$platform" = windows ]; then
-            echo "     powershell -ExecutionPolicy Bypass -File tools\\install.ps1 -Src .\\output\\$TITLE_ID -Console <console-ip>"
+            echo "     powershell -ExecutionPolicy Bypass -File tools\\install.ps1 -Src .\\output\\$TITLE_ID -Console <console-ip> -RemoteDir <installed-title-path> -Closed"
         else
-            echo "     ./tools/install.sh --src output/$TITLE_ID --console <console-ip>"
+            echo "     ./tools/install.sh --src output/$TITLE_ID --console <console-ip> --remote-dir <installed-title-path> --closed"
         fi
-        echo "   (or copy output/$TITLE_ID to /mnt/ext1/etaHEN/games/ yourself)"
+        echo "   (or copy output/$TITLE_ID by USB/file manager or Wi-Fi FTP to your loader-selected location)"
         echo
         echo "3. Launch \"Ship of Harkinian\". See SETTINGS.md for menu, language and FPS setup."
         echo

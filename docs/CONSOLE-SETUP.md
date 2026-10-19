@@ -1,3 +1,8 @@
+CURRENT INSTALLATION GUIDE: https://github.com/mshivam019/oot64-ps5/blob/main/INSTALL.md
+Use that guide for internal/USB storage, offline copying or Wi-Fi FTP.
+M.2, Ethernet and PS5 Upload are optional. Paths in older instructions below
+describe the developer setup, not required hardware or transfer software.
+
 # Tested console setup
 
 Verified on firmware **9.00** on 2026-09-26 from the console's autoload file,

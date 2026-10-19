@@ -1,5 +1,9 @@
 # Ship of Harkinian for PS5
 
+**[Start here: installation, USB/offline copying, Wi-Fi FTP and game-file locations](INSTALL.md).**
+M.2, Ethernet and PS5 Upload are optional. The guide also explains recovery after
+store updates; older packaged instructions may describe the developer's M.2 setup.
+
 A native PS5 port of [Ship of Harkinian](https://github.com/HarbourMasters/Shipwright)
 (The Legend of Zelda: Ocarina of Time PC port, version 9.2.3). It runs as a homebrew title
 on jailbroken consoles and renders through the ps5-opengl SDK (OpenGL 3.3 Core over AGC).
@@ -34,7 +38,7 @@ Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-S
 
 ## Requirements
 
-- Jailbroken PS5 with an FTP server and folder-title support through kstuff + ShadowMountPlus.
+- Homebrew-capable PS5 with compatible native folder-title support and a file-copy method (USB/file manager or FTP).
 - About 200 MB of free space for the base game; about 4 GiB extra for OoT Reloaded HD.
 - Your own Ocarina of Time ROM, converted into `oot.o2r` (see [Building](docs/BUILDING.md)).
 - To build: Linux or WSL2 (Ubuntu 24.04), clang 18, CMake, Ninja, Python 3, the PS5 payload
@@ -42,48 +46,22 @@ Payload Manager. See the exact tested versions in [Console setup](docs/CONSOLE-S
 
 ## Installation
 
-From a [release](https://github.com/mshivam019/oot64-ps5/releases), with no compiling:
+1. Install `PPSA99620.zip` from the release/ProsperoStore, or unpack the complete
+   precompiled app folder for manual copying. No PS5 compilation is needed.
+2. Let [desktop Ship of Harkinian 9.2.3](https://github.com/HarbourMasters/Shipwright/releases/tag/9.2.3) extract your supported ROM; close it and copy `oot.o2r`.
+3. With the PS5 game closed, put `oot.o2r` in the installed title's `assets/`
+   folder. Use USB plus your console file manager, Wi-Fi FTP, Ethernet FTP or
+   your preferred copy method. Choose your loader's location; M.2 is optional.
+4. For a new manual installation, refresh/mount/register the whole title folder
+   with your existing loader. Start the home-screen tile.
 
-[Release v1.2.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.2.0) and new source builds enable **right-stick camera controls and HD textures / mods by default**, with independent switches in Settings → Mod Menu. Saved off settings are preserved. HD archives must be installed separately. See [SETTINGS.md](docs/SETTINGS.md).
-
-Existing [stock v1.0.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.0.0) and [camera-controls v1.1.0](https://github.com/mshivam019/oot64-ps5/releases/tag/v1.1.0) downloads predate these runtime toggles.
-
-1. Download the archive for your PC (`-windows.zip`, or `-linux.zip` on Linux and
-   macOS), extract it and open a terminal in the extracted folder.
-2. Create `oot.o2r` from your own ROM with the official
-   [Ship of Harkinian 9.2.3](https://github.com/HarbourMasters/Shipwright/releases) PC
-   build and put it in `output/PPSA99620/assets/` (the archive already includes
-   `soh.o2r`). The helper launches SoH once, waits for the extraction and copies the
-   file; close the game when it starts.
-3. Get the `output/PPSA99620` folder onto the console, e.g. at
-   `/mnt/ext1/etaHEN/games/PPSA99620`, and register it with your homebrew launcher.
-   Use whatever you already use (any FTP client such as FileZilla or WinSCP,
-   PS5Upload, …); the `install` helpers below are optional.
-4. Start **Ship of Harkinian** from the home screen.
-
-**Windows** (PowerShell; `install.ps1` also registers and launches the title via PS5Upload):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\make-assets.ps1 -Rom <oot.z64> -SoH <soh-windows folder>
-powershell -ExecutionPolicy Bypass -File tools\install.ps1 -Src .\output\PPSA99620 -Console <console-ip>
-```
-
-**Linux** (needs `curl`; register the folder from your homebrew launcher afterwards):
-
-```sh
-./tools/make-assets.sh --rom <oot.z64> --soh <soh.appimage>
-./tools/install.sh --src output/PPSA99620 --console <console-ip>
-```
-
-**macOS:** use the Linux archive. Run the official `soh.app` once and select your ROM,
-then copy `~/Library/Application Support/com.shipofharkinian.soh/oot.o2r` into
-`output/PPSA99620/assets/`, then copy the folder over as in step 3 (or with
-`./tools/install.sh`).
-
-The archive's `INSTALL.txt` repeats these steps for its platform.
-
-Building from source instead is covered in [docs/BUILDING.md](docs/BUILDING.md);
-[docs/RELEASING.md](docs/RELEASING.md) packages a build for other people.
+[INSTALL.md](INSTALL.md) has exact file layouts, the optional separate prepare
+and transfer helpers, storage choices and recovery after store updates.
+The Windows/Linux archives contain the same PS5 application; their older
+`INSTALL.txt` may describe the developer's M.2 setup. Current optional helpers
+require Python 3.9+; direct copying requires neither Python nor PS5 Upload.
+See [mods and controller prompts](docs/MODS.md) for optional texture packs and
+[building](docs/BUILDING.md) only if you want to compile the port yourself.
 
 The updated PS5 source uses a fixed **60 FPS interpolation** target. Existing release
 downloads still need **Interpolation FPS = 60** and **Match Refresh Rate off**.
