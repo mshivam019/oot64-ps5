@@ -32,6 +32,27 @@ not every loader can run titles directly from every USB format or path.
 
 ## Already installed from ProsperoStore?
 
+**Easier optional setup:** download [PS5-Install-Helper-v1.2.0.zip](https://github.com/mshivam019/oot64-ps5/releases/download/v1.2.0/PS5-Install-Helper-v1.2.0.zip), then:
+
+1. Open **Store-Setup-Windows.cmd** on Windows, or run `sh store-setup.sh` on Linux/macOS.
+2. Choose the game file/prepared folder described above, then an output location on your computer or USB drive.
+3. Wait for **READY**. Copy the contents of the finished `PPSA99620` folder into your existing store-installed title folder, after saving and closing the game.
+
+This download already knows which game you selected. It asks for no title ID,
+app ZIP, console IP or M.2 path. Preparation and validation run together, then
+it opens the ready folder. Existing output is preserved; another run makes a new
+numbered folder. A manifest and validation report stay beside the title folder.
+The generated folder is a **game-data overlay**, for the app already installed
+from the store. It does not compile private modules or convert raw N64 ROMs;
+the game-specific input requirements above still apply.
+
+Python 3.9+ is still needed. Windows/macOS use their system file pickers;
+Linux uses Zenity/KDialog when available, otherwise text prompts work. Use
+`python3 store-setup.py --text` if you prefer prompts. File transfer remains
+separate and can use your preferred method. No console connection is made.
+
+**Manual copying also works:**
+
 1. Save and close the game.
 2. Find the installed `PPSA99620` folder. It contains `eboot.bin` and `sce_sys/`.
 3. Add **only the game files described above**, at the specified relative path.
@@ -56,7 +77,7 @@ prepared USB folder does not install itself just by plugging the drive in.
 
 ## Optional common file helper
 
-[Download PS5-Install-Helper-v1.1.0.zip](https://github.com/mshivam019/oot64-ps5/releases/download/v1.2.0/PS5-Install-Helper-v1.1.0.zip).
+[Download PS5-Install-Helper-v1.2.0.zip](https://github.com/mshivam019/oot64-ps5/releases/download/v1.2.0/PS5-Install-Helper-v1.2.0.zip).
 It runs on a computer with **Python 3.9+**, uses only the standard library, and
 needs no PS5 SDK, PS5 Upload or extra Python packages. The game-specific converter
 requirements above still apply. Manual copying does not require this helper.

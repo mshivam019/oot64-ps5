@@ -21,3 +21,7 @@ manifest entries, symlinks, absent manifests, report preservation and damaged O2
 ZIP CRCs. Verification does not contact a console or change the checked files.
 Run both suites with `python -m unittest discover -s tools/tests -p 'test_*.py' -v`
 from the repository root. The localhost FTP test needs pyftpdlib; end users do not.
+
+The store-setup suite checks automatic verification, cancellation before any
+copy, repeated-run preservation, invalid inputs and the text fallback. Native
+Windows/macOS picker behavior is not established by these Linux tests.

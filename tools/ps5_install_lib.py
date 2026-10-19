@@ -15,7 +15,7 @@ import tempfile
 import uuid
 import zipfile
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 PORTS = {
     'PPSA99620': ('Ocarina of Time', 'oot.o2r', 'assets/oot.o2r'),
     'PPSA99621': ("Majora's Mask", 'mm.o2r', 'assets/mm.o2r'),

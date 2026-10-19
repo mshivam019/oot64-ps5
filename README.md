@@ -1,5 +1,7 @@
 # Ship of Harkinian for PS5
 
+**Installed from ProsperoStore?** [Use the game-specific setup](INSTALL.md#already-installed-from-prosperostore): choose your game files and an output location; it prepares and checks a ready-to-copy folder automatically. Download **PS5-Install-Helper-v1.2.0.zip** from this game's release. Python 3.9+ is required; game conversion/module preparation requirements are listed in the guide.
+
 **[Start here: installation, USB/offline copying, Wi-Fi FTP and game-file locations](INSTALL.md).**
 M.2, Ethernet and PS5 Upload are optional. The guide also explains recovery after
 store updates; older packaged instructions may describe the developer's M.2 setup.
